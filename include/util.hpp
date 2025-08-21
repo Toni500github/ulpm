@@ -26,10 +26,13 @@
 #pragma once
 
 #include <cstdlib>
+#include <unordered_map>
 #include <vector>
 
 #include "fmt/color.h"
 #include "fmt/core.h"
+
+#define UNKNOWN "(unknown)"
 
 #define BOLD_COLOR(x) (fmt::emphasis::bold | fmt::fg(fmt::rgb(x)))
 
@@ -84,4 +87,6 @@ inline struct
     std::vector<std::string> arguments;
 } cmd_options;
 
-bool hasStart(const std::string_view fullString, const std::string_view start);
+bool        hasStart(const std::string_view fullString, const std::string_view start);
+int         str_to_enum(const std::unordered_map<std::string, int>& map, const std::string_view name);
+std::string draw_menu(const std::vector<std::string>& entries, const std::string& text);

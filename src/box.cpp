@@ -26,8 +26,8 @@ static std::vector<std::string> wrap_text(const std::string& text, const size_t 
 }
 
 // omfg too many args
-void draw_search_box(const std::string& query, const std::string& text, const std::vector<std::string>& results, const size_t selected,
-                     size_t& scroll_offset, const size_t cursor_x, const bool is_search_tab)
+void draw_search_box(const std::string& query, const std::string& text, const std::vector<std::string>& results,
+                     const size_t selected, size_t& scroll_offset, const size_t cursor_x, const bool is_search_tab)
 {
     erase();
     box(stdscr, 0, 0);
