@@ -1,4 +1,5 @@
--I./include
+-Iinclude
+-Iinclude/libs
 -Wall
 -Wextra
 -Wpedantic
