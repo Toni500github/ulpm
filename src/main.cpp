@@ -1,6 +1,5 @@
 #include <ncurses.h>
 
-#include <algorithm>
 #include <cstdlib>
 #include <string_view>
 #include <unordered_map>
@@ -10,6 +9,7 @@
 #include "fmt/base.h"
 #include "fmt/compile.h"
 #include "settings.hpp"
+#include "switch_fnv1a.hpp"
 #include "texts.hpp"
 #include "util.hpp"
 
@@ -32,6 +32,8 @@ static const std::unordered_map<std::string_view, OPs> map{
     { "install", INSTALL },
     { "init", INIT },
 };
+
+struct cmd_options_t cmd_options;
 
 OPs str_to_enum(const std::string_view name)
 {
@@ -92,6 +94,44 @@ bool parse_install_args(int argc, char* argv[])
 
     if (cmd_options.arguments.empty())
         die("install: no repositories/paths given");
+
+    return true;
+}
+
+bool parse_init_args(int argc, char* argv[])
+{
+    // clang-format off
+    const struct option long_opts[] = {
+        {"force", no_argument, nullptr, 'f'},
+        {"yes",   no_argument, nullptr, 'y'},
+        {"help",  no_argument, nullptr, 'h'},
+
+        {"language",            required_argument, nullptr, "language"_fnv1a16},
+        {"pm",                  required_argument, nullptr, "pm"_fnv1a16},
+        {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
+        {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
+        {0, 0, 0, 0}
+    };
+    // clang-format on
+
+    int opt;
+    while ((opt = getopt_long(argc, argv, "+fyh", long_opts, nullptr)) != -1)
+    {
+        switch (opt)
+        {
+            case 0:   break;
+            case '?': help_install(EXIT_FAILURE); break;
+
+            case 'h': help_install(EXIT_SUCCESS); break;
+            case 'f': cmd_options.install_force = true; break;
+            case 'y': cmd_options.init_yes = true; break;
+
+            case "language"_fnv1a16:            Settings::manifest_defaults.language = optarg; break;
+            case "pm"_fnv1a16:                  Settings::manifest_defaults.prefered_pm = optarg; break;
+            case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
+            case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
+        }
+    }
 
     return true;
 }
@@ -160,6 +200,7 @@ static bool parseargs(int argc, char* argv[])
     switch (op)
     {
         case INSTALL: optind = 0; return parse_install_args(sub_argc, sub_argv);
+        case INIT:    optind = 0; return parse_init_args(sub_argc, sub_argv);
         default:      optind = 0; return parse_general_command_args(sub_argc, sub_argv);
     }
 
@@ -174,7 +215,15 @@ int main(int argc, char* argv[])
     if (op == INIT)
     {
         Settings::Manifest man;
-        man.init_project();
+        if (!cmd_options.init_yes)
+        {
+            initscr();
+            noecho();
+            cbreak();              // Enable immediate character input
+            keypad(stdscr, TRUE);  // Enable arrow keys
+            curs_set(1);           // Show cursor
+        }
+        man.init_project(cmd_options);
     }
 
     return 0;

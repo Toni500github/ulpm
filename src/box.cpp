@@ -98,3 +98,41 @@ void draw_search_box(const std::string& query, const std::string& text, const st
 
     refresh();
 }
+
+void draw_input_box(WINDOW* win, const std::string& prompt, const std::string& input, const size_t cursor_pos)
+{
+    werase(win);
+    box(win, 0, 0);
+
+    int maxx = getmaxx(stdscr);
+
+    // Draw prompt
+    wattron(win, A_BOLD);
+    mvwprintw(win, 1, 2, "%s", prompt.c_str());
+    wattroff(win, A_BOLD);
+
+    // Calculate available space for input field (considering prompt and borders)
+    int input_start_x   = 2 + prompt.length() + 1;
+    int available_width = maxx - input_start_x - 2;  // -2 for right border and padding
+
+    // Draw input field with background
+    wattron(win, A_REVERSE);
+    for (int i = 0; i < available_width; i++)
+    {
+        if (i < static_cast<int>(input.length()))
+            mvwaddch(win, 1, input_start_x + i, input[i]);
+        else
+            mvwaddch(win, 1, input_start_x + i, ' ');
+    }
+    wattroff(win, A_REVERSE);
+
+    // Draw instructions
+    mvwprintw(win, 3, 2, "Enter: Submit");
+    mvwprintw(win, 4, 2, "ESC: Cancel");
+
+    // Position cursor
+    size_t display_cursor_pos = std::min(cursor_pos, static_cast<size_t>(available_width - 1));
+    wmove(win, 1, input_start_x + display_cursor_pos);
+    curs_set(1);  // Make cursor visible
+    wrefresh(win);
+}

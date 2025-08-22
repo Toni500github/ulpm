@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iterator>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -11,6 +12,7 @@
 // src/box.cpp
 void draw_search_box(const std::string& query, const std::string& text, const std::vector<std::string>& results,
                      const size_t selected, size_t& scroll_offset, const size_t cursor_x, const bool is_search_tab);
+void draw_input_box(WINDOW* win, const std::string& prompt, const std::string& input, const size_t cursor_pos);
 
 bool hasStart(const std::string_view fullString, const std::string_view start)
 {
@@ -26,36 +28,47 @@ int str_to_enum(const std::unordered_map<std::string, int>& map, const std::stri
     return -1;
 }
 
-static void remove_entries(std::vector<std::string>& results_value, const std::string& query)
+static size_t remove_entries(std::vector<std::string>& results_value, const std::string& query)
 {
     auto new_end = std::remove_if(results_value.begin(), results_value.end(),
                                   [&](const std::string& s) { return !hasStart(s, query); });
 
     results_value.erase(new_end, results_value.end());
+    return results_value.empty() ? std::string::npos : std::distance(results_value.begin(), new_end) - 1;
 }
 
 const size_t SEARCH_TITLE_LEN = 2 + 8;  // 2 for box border, 8 for "Search: "
-std::string  draw_menu(const std::vector<std::string>& entries, const std::string& text)
+std::string  draw_entry_menu(const std::vector<std::string>& entries, const std::string& text,
+                             const std::string& default_option)
 {
-    initscr();
-    noecho();
-    cbreak();              // Enable immediate character input
-    keypad(stdscr, TRUE);  // Enable arrow keys
-
     std::vector<std::string> results(entries);
     if (entries.empty())
         return "";
 
-    std::string query;
+    std::string query         = default_option;
     int         ch            = 0;
     size_t      selected      = 0;
     size_t      scroll_offset = 0;
-    size_t      cursor_x      = SEARCH_TITLE_LEN;
+    size_t      cursor_x      = SEARCH_TITLE_LEN + query.length();
     bool        is_search_tab = true;
 
+    if (!default_option.empty())
+    {
+        selected = remove_entries(results, query);
+        if (selected == std::string::npos)
+        {
+            selected = 0;
+        }
+        else
+        {
+            is_search_tab = false;
+            curs_set(0);
+        }
+    }
+
     // yeah magic numbers buuuu
-    const int max_visible = ((getmaxy(stdscr) - 3) / 2) * 0.80f;
-    draw_search_box(query, text, entries, selected, scroll_offset, cursor_x, is_search_tab);
+    const int max_visible = static_cast<int>((getmaxy(stdscr) - 3) / 2) * 0.80f;
+    draw_search_box(query, text, results, selected, scroll_offset, cursor_x, is_search_tab);
     move(1, cursor_x);
 
     while ((ch = getch()) != ERR)
@@ -83,6 +96,11 @@ std::string  draw_menu(const std::vector<std::string>& entries, const std::strin
                     remove_entries(results, query);
                 }
             }
+            else if (ch == KEY_DC)  // Delete key
+            {
+                if (cursor_x < SEARCH_TITLE_LEN + query.size())
+                    query.erase(cursor_x - SEARCH_TITLE_LEN, 1);
+            }
             else if (ch == KEY_LEFT)
             {
                 if (cursor_x > SEARCH_TITLE_LEN)
@@ -90,12 +108,20 @@ std::string  draw_menu(const std::vector<std::string>& entries, const std::strin
             }
             else if (ch == KEY_RIGHT)
             {
-                if (cursor_x < SEARCH_TITLE_LEN + query.size())
+                if (cursor_x < SEARCH_TITLE_LEN + query.length())
                     ++cursor_x;
             }
             else if (ch == KEY_DOWN || ch == '\n')
             {
                 is_search_tab = false;
+            }
+            else if (ch == KEY_HOME)  // Move to beginning
+            {
+                cursor_x = 0;
+            }
+            else if (ch == KEY_END)  // Move to end
+            {
+                cursor_x = query.length();
             }
             else if (!(ch >= KEY_UP && ch <= KEY_MAX))
             {
@@ -152,4 +178,64 @@ std::string  draw_menu(const std::vector<std::string>& entries, const std::strin
 
     endwin();
     return UNKNOWN;
+}
+
+std::string draw_input_menu(const std::string& prompt, const std::string& default_option)
+{
+    const size_t INPUT_TITLE_LEN = prompt.length() + 1;
+    std::string  input           = default_option;
+    int          ch              = 0;
+    size_t       cursor_x        = INPUT_TITLE_LEN;
+
+    WINDOW* input_win = stdscr;
+    draw_input_box(input_win, prompt, input, cursor_x - INPUT_TITLE_LEN);
+    while ((ch = wgetch(stdscr)) != ERR)
+    {
+        if (ch == 27 || ch == KEY_F(1))  // ESC or F1 to cancel
+        {
+            break;
+        }
+        else if (ch == '\n' || ch == KEY_ENTER)  // Enter to submit
+        {
+            endwin();
+            return input;
+        }
+        else if (ch == KEY_BACKSPACE || ch == 127)
+        {
+            if (!input.empty() && cursor_x > INPUT_TITLE_LEN)
+                input.erase(--cursor_x - INPUT_TITLE_LEN, 1);
+        }
+        else if (ch == KEY_LEFT)
+        {
+            if (cursor_x > INPUT_TITLE_LEN)
+                --cursor_x;
+        }
+        else if (ch == KEY_RIGHT)
+        {
+            if (cursor_x < INPUT_TITLE_LEN + input.size())
+                ++cursor_x;
+        }
+        else if (ch == KEY_DC)  // Delete key
+        {
+            if (cursor_x < INPUT_TITLE_LEN + input.size())
+                input.erase(cursor_x - INPUT_TITLE_LEN, 1);
+        }
+        else if (ch == KEY_HOME)
+        {
+            cursor_x = INPUT_TITLE_LEN;
+        }
+        else if (ch == KEY_END)
+        {
+            cursor_x = INPUT_TITLE_LEN + input.size();
+        }
+        else if (!(ch >= KEY_UP && ch <= KEY_MAX))  // Printable characters
+        {
+            input.insert(cursor_x++ - INPUT_TITLE_LEN, 1, ch);
+        }
+
+        draw_input_box(input_win, prompt, input, cursor_x - INPUT_TITLE_LEN);
+    }
+
+    endwin();
+    return "";
 }

@@ -81,12 +81,16 @@ void info(const std::string_view fmt, Args&&... args) noexcept
 
 #undef BOLD_COLOR
 
-inline struct
+struct cmd_options_t
 {
     bool                     install_force = false;
+    bool                     init_force    = false;
+    bool                     init_yes      = false;
     std::vector<std::string> arguments;
-} cmd_options;
+};
 
 bool        hasStart(const std::string_view fullString, const std::string_view start);
 int         str_to_enum(const std::unordered_map<std::string, int>& map, const std::string_view name);
-std::string draw_menu(const std::vector<std::string>& entries, const std::string& text);
+std::string draw_entry_menu(const std::vector<std::string>& entries, const std::string& text,
+                            const std::string& default_option);
+std::string draw_input_menu(const std::string& prompt, const std::string& default_option);
