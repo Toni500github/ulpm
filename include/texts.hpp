@@ -29,12 +29,12 @@
 #include <string_view>
 
 // cufetchpm
-inline constexpr std::string_view cufetchpm_help = (R"(Usage: cufetchpm <COMMAND(s)...> ...
+inline constexpr std::string_view cufetchpm_help = (R"(Usage: ulpm <COMMAND(s)...> ...
 Manage all your projects with multiple languages on a single command universally.
 
 Commands:
+    init                               Initialize a project.
     install [OPTIONS] <SOURCE>...      Install one or more plugin sources from a Git repo or local path.
-    gen-manifest                       Generate a template 'cufetchpm.toml' file.
 
 Global options:
     -h, --help          Show this help message.

@@ -60,8 +60,31 @@ void Manifest::init_project(struct cmd_options_t& cmd_options)
 
     m_settings.project_name        = draw_input_menu("Name of the project:", m_settings.project_name);
     m_settings.project_description = draw_input_menu("Description of the project:", m_settings.project_description);
+
+    m_settings.license = draw_entry_menu({ "Apache-2.0",        "BSD-2-Clause",  "BSD-3-Clause",      "GPL-2.0-only",
+                                           "GPL-2.0-or-later",  "GPL-3.0-only",  "GPL-3.0-or-later",  "LGPL-2.1-only",
+                                           "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later", "MIT",
+                                           "MPL-2.0",           "AGPL-3.0-only", "AGPL-3.0-or-later", "EPL-1.0",
+                                           "EPL-2.0",           "CDDL-1.0",      "Unlicense",         "CC0-1.0" },
+                                         "Choose a license for the project", m_settings.license);
     write_to_file(file);
     fclose(file);
+    if (fs::exists("LICENSE.txt"))
+    {
+        warn("LICENSE.txt already exists, skipping download");
+        return;
+    }
+
+    info("Downloading license {} to LICENSE.txt ...", m_settings.license);
+    std::string err;
+    const std::string url =
+        "https://raw.githubusercontent.com/spdx/license-list-data/master/text/" + m_settings.license + ".txt";
+    if (Process("curl -L " + url + " -o LICENSE.txt", "", nullptr, [&err](const char* buf, size_t n) {
+            err.assign(buf, n);
+        }).get_exit_status() != 0)
+        die("Failed to download to file LICENSE.txt: {}", err);
+
+    info("Done! Remember to modify the copyright holder and year");
 }
 
 void Manifest::write_to_file(std::FILE* file)
@@ -84,6 +107,8 @@ void Manifest::write_to_file(std::FILE* file)
         "project_description",
         rapidjson::Value(m_settings.project_description.c_str(), m_settings.project_description.size(), allocator),
         allocator);
+    m_doc.AddMember("license", rapidjson::Value(m_settings.license.c_str(), m_settings.license.size(), allocator),
+                    allocator);
     m_doc.AddMember("language", rapidjson::Value(m_settings.language.c_str(), m_settings.language.size(), allocator),
                     allocator);
     m_doc.AddMember("pm", rapidjson::Value(m_settings.prefered_pm.c_str(), m_settings.prefered_pm.size(), allocator),

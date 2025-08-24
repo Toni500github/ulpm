@@ -133,6 +133,6 @@ void draw_input_box(WINDOW* win, const std::string& prompt, const std::string& i
     // Position cursor
     size_t display_cursor_pos = std::min(cursor_pos, static_cast<size_t>(available_width - 1));
     wmove(win, 1, input_start_x + display_cursor_pos);
-    curs_set(1);  // Make cursor visible
+    curs_set(1);
     wrefresh(win);
 }

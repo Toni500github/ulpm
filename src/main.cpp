@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "commands.hpp"
 #include "fmt/base.h"
 #include "fmt/compile.h"
 #include "settings.hpp"
@@ -109,6 +108,7 @@ bool parse_init_args(int argc, char* argv[])
         {"language",            required_argument, nullptr, "language"_fnv1a16},
         {"pm",                  required_argument, nullptr, "pm"_fnv1a16},
         {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
+        {"license",             required_argument, nullptr, "license"_fnv1a16},
         {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
         {0, 0, 0, 0}
     };
@@ -128,6 +128,7 @@ bool parse_init_args(int argc, char* argv[])
 
             case "language"_fnv1a16:            Settings::manifest_defaults.language = optarg; break;
             case "pm"_fnv1a16:                  Settings::manifest_defaults.prefered_pm = optarg; break;
+            case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
             case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
             case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
         }

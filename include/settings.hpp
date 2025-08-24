@@ -10,6 +10,7 @@ inline struct ManiSettings
 {
     std::string language;
     std::string prefered_pm;
+    std::string license;
     std::string project_name;
     std::string project_description;
 } manifest_defaults;
