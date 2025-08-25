@@ -23,6 +23,7 @@ public:
 
 private:
     const std::string   _manifest_name = "ulpm.json";
+    std::FILE*          m_file;
     rapidjson::Document m_doc;
     ManiSettings&       m_settings;
     void                write_to_file(std::FILE* file);

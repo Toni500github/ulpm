@@ -25,6 +25,81 @@ static std::vector<std::string> wrap_text(const std::string& text, const size_t 
     return lines;
 }
 
+// Begin: some code taken from https://github.com/rofl0r/ncdu in src/delete.c and src/util.c
+#define ncaddstr(r, c, s) mvaddstr(subwinr + (r), subwinc + (c), s)
+#define ncmove(r, c) move(subwinr + (r), subwinc + (c))
+
+int subwinr;
+int subwinc;
+
+static void nccreate(int height, int width, const char* title)
+{
+    int i;
+
+    int winrows, wincols;
+    getmaxyx(stdscr, winrows, wincols);
+    subwinr = winrows / 2 - height / 2;
+    subwinc = wincols / 2 - width / 2;
+
+    /* clear window */
+    for (i = 0; i < height; i++)
+        mvhline(subwinr + i, subwinc, ' ', width);
+
+    /* box() only works around curses windows, so create our own */
+    move(subwinr, subwinc);
+    addch(ACS_ULCORNER);
+    for (i = 0; i < width - 2; i++)
+        addch(ACS_HLINE);
+    addch(ACS_URCORNER);
+
+    move(subwinr + height - 1, subwinc);
+    addch(ACS_LLCORNER);
+    for (i = 0; i < width - 2; i++)
+        addch(ACS_HLINE);
+    addch(ACS_LRCORNER);
+
+    mvvline(subwinr + 1, subwinc, ACS_VLINE, height - 2);
+    mvvline(subwinr + 1, subwinc + width - 1, ACS_VLINE, height - 2);
+
+    /* title */
+    attron(A_BOLD);
+    mvaddstr(subwinr, subwinc + 4, title);
+    attroff(A_BOLD);
+}
+
+static void ncprint(int r, int c, const char* fmt, ...)
+{
+    va_list arg;
+    va_start(arg, fmt);
+    move(subwinr + r, subwinc + c);
+    vw_printw(stdscr, fmt, arg);
+    va_end(arg);
+}
+
+void draw_exit_confirm(const int seloption)
+{
+    nccreate(6, 60, "Confirm exiting");
+
+    ncprint(1, 2, "Are you sure you want to exit? All changes will be lost.");
+
+    if (seloption == 1)
+        attron(A_REVERSE);
+    ncaddstr(4, 20, "yes");
+    attroff(A_REVERSE);
+
+    if (seloption == 0)
+        attron(A_REVERSE);
+    ncaddstr(4, 34, "no");
+    attroff(A_REVERSE);
+
+    switch (seloption)
+    {
+        case 0: ncmove(4, 20); break;
+        case 1: ncmove(4, 34); break;
+    }
+}
+// End: some code taken from https://github.com/rofl0r/ncdu in src/delete.c and src/util.c
+
 // omfg too many args
 void draw_search_box(const std::string& query, const std::string& text, const std::vector<std::string>& results,
                      const size_t selected, size_t& scroll_offset, const size_t cursor_x, const bool is_search_tab)

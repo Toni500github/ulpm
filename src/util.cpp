@@ -13,6 +13,7 @@
 void draw_search_box(const std::string& query, const std::string& text, const std::vector<std::string>& results,
                      const size_t selected, size_t& scroll_offset, const size_t cursor_x, const bool is_search_tab);
 void draw_input_box(WINDOW* win, const std::string& prompt, const std::string& input, const size_t cursor_pos);
+void draw_exit_confirm(const int seloption);
 
 bool hasStart(const std::string_view fullString, const std::string_view start)
 {
@@ -43,7 +44,10 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
 {
     std::vector<std::string> results(entries);
     if (entries.empty())
+    {
+        endwin();
         return "";
+    }
 
     std::string query         = default_option;
     int         ch            = 0;
@@ -71,16 +75,15 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
     draw_search_box(query, text, results, selected, scroll_offset, cursor_x, is_search_tab);
     move(1, cursor_x);
 
+    bool exit          = false;
+    bool exit_selected = false;
     while ((ch = getch()) != ERR)
     {
-        if (ch == 27)  // ESC
-            break;
-
         if (ch == '\t')
         {
             is_search_tab = !is_search_tab;
         }
-        else if (is_search_tab)
+        else if (is_search_tab && ch != 27 && !exit)
         {
             bool erased = false;
             if (ch == KEY_BACKSPACE || ch == 127)
@@ -141,7 +144,11 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
             // go up
             if (ch == KEY_DOWN || ch == KEY_RIGHT || tolower(ch) == 'j')
             {
-                if (selected < results.size() - 1)
+                if (exit)
+                {
+                    exit_selected = false;
+                }
+                else if (selected < results.size() - 1)
                 {
                     ++selected;
                     if (selected >= scroll_offset + max_visible)
@@ -151,7 +158,11 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
             // go down
             else if (ch == KEY_UP || ch == KEY_LEFT || tolower(ch) == 'k')
             {
-                if (selected == 0)
+                if (exit)
+                {
+                    exit_selected = true;
+                }
+                else if (selected == 0)
                 {
                     is_search_tab = true;
                 }
@@ -162,6 +173,23 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
                         --scroll_offset;
                 }
             }
+            // ESC pressed
+            else if (ch == 27 && !exit)
+            {
+                exit = true;
+            }
+            // operation delete and choose "yes"
+            else if (exit && ch == '\n' && exit_selected)
+            {
+                endwin();
+                warn("Balling out. All changes are lost");
+                std::exit(1);
+            }
+            // operation delete and pressed 'q' or "no"
+            else if (exit && ch != 27 && (!exit_selected || ch == 'q'))
+            {
+                exit = false;
+            }
             // pressed an item
             else if (ch == '\n' && !results.empty())
             {
@@ -170,10 +198,17 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
             }
         }
 
-        draw_search_box(query, text, (query.empty() ? entries : results), selected, scroll_offset, cursor_x,
-                        is_search_tab);
-
-        curs_set(is_search_tab);
+        if (exit)
+        {
+            curs_set(false);
+            draw_exit_confirm(exit_selected);
+        }
+        else
+        {
+            draw_search_box(query, text, (query.empty() ? entries : results), selected, scroll_offset, cursor_x,
+                            is_search_tab);
+            curs_set(is_search_tab);
+        }
     }
 
     endwin();
