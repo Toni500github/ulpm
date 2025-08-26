@@ -224,16 +224,32 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
 
     WINDOW* input_win = stdscr;
     draw_input_box(input_win, prompt, input, cursor_x - INPUT_TITLE_LEN);
+    bool exit          = false;
+    bool exit_selected = false;
     while ((ch = wgetch(stdscr)) != ERR)
     {
-        if (ch == 27 || ch == KEY_F(1))  // ESC or F1 to cancel
+        if (ch == 27)  // ESC to exit
         {
-            break;
+            exit = true;
         }
         else if (ch == '\n' || ch == KEY_ENTER)  // Enter to submit
         {
-            endwin();
-            return input;
+            if (exit && exit_selected)
+            {
+                endwin();
+                warn("Balling out. All changes are lost");
+                std::exit(1);
+            }
+            // operation delete and pressed 'q' or "no"
+            else if (exit && ch != 27 && (!exit_selected || ch == 'q'))
+            {
+                exit = false;
+            }
+            else
+            {
+                endwin();
+                return input;
+            }
         }
         else if (ch == KEY_BACKSPACE || ch == 127)
         {
@@ -242,12 +258,16 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
         }
         else if (ch == KEY_LEFT)
         {
-            if (cursor_x > INPUT_TITLE_LEN)
+            if (exit)
+                exit_selected = true;
+            else if (cursor_x > INPUT_TITLE_LEN)
                 --cursor_x;
         }
         else if (ch == KEY_RIGHT)
         {
-            if (cursor_x < INPUT_TITLE_LEN + input.size())
+            if (exit)
+                exit_selected = false;
+            else if (cursor_x < INPUT_TITLE_LEN + input.size())
                 ++cursor_x;
         }
         else if (ch == KEY_DC)  // Delete key
@@ -268,7 +288,16 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
             input.insert(cursor_x++ - INPUT_TITLE_LEN, 1, ch);
         }
 
-        draw_input_box(input_win, prompt, input, cursor_x - INPUT_TITLE_LEN);
+        if (exit)
+        {
+            curs_set(false);
+            draw_exit_confirm(exit_selected);
+        }
+        else
+        {
+            curs_set(true);
+            draw_input_box(input_win, prompt, input, cursor_x - INPUT_TITLE_LEN);
+        }
     }
 
     endwin();

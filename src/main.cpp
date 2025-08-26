@@ -213,6 +213,7 @@ int main(int argc, char* argv[])
     if (!parseargs(argc, argv))
         return -1;
 
+    setlocale(LC_ALL, "");
     if (op == INIT)
     {
         Settings::Manifest man;

@@ -13,6 +13,9 @@ inline struct ManiSettings
     std::string license;
     std::string project_name;
     std::string project_description;
+    std::string project_version;
+    std::string js_main;
+    std::string author;
 } manifest_defaults;
 
 class Manifest
@@ -26,6 +29,6 @@ private:
     std::FILE*          m_file;
     rapidjson::Document m_doc;
     ManiSettings&       m_settings;
-    void                write_to_file(std::FILE* file);
+    void                create_manifest(std::FILE* file);
 };
 }  // namespace Settings

@@ -203,7 +203,7 @@ void draw_input_box(WINDOW* win, const std::string& prompt, const std::string& i
 
     // Draw instructions
     mvwprintw(win, 3, 2, "Enter: Submit");
-    mvwprintw(win, 4, 2, "ESC: Cancel");
+    mvwprintw(win, 4, 2, "ESC: Exit");
 
     // Position cursor
     size_t display_cursor_pos = std::min(cursor_pos, static_cast<size_t>(available_width - 1));
