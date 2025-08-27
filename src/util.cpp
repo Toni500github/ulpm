@@ -39,7 +39,7 @@ static size_t remove_entries(std::vector<std::string>& results_value, const std:
 }
 
 const size_t SEARCH_TITLE_LEN = 2 + 8;  // 2 for box border, 8 for "Search: "
-std::string  draw_entry_menu(const std::vector<std::string>& entries, const std::string& text,
+std::string  draw_entry_menu(const std::string& prompt, const std::vector<std::string>& entries,
                              const std::string& default_option)
 {
     std::vector<std::string> results(entries);
@@ -72,7 +72,7 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
 
     // yeah magic numbers buuuu
     const int max_visible = static_cast<int>((getmaxy(stdscr) - 3) / 2) * 0.80f;
-    draw_search_box(query, text, results, selected, scroll_offset, cursor_x, is_search_tab);
+    draw_search_box(query, prompt, results, selected, scroll_offset, cursor_x, is_search_tab);
     move(1, cursor_x);
 
     bool exit          = false;
@@ -205,7 +205,7 @@ std::string  draw_entry_menu(const std::vector<std::string>& entries, const std:
         }
         else
         {
-            draw_search_box(query, text, (query.empty() ? entries : results), selected, scroll_offset, cursor_x,
+            draw_search_box(query, prompt, (query.empty() ? entries : results), selected, scroll_offset, cursor_x,
                             is_search_tab);
             curs_set(is_search_tab);
         }
@@ -222,11 +222,10 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
     int          ch              = 0;
     size_t       cursor_x        = INPUT_TITLE_LEN;
 
-    WINDOW* input_win = stdscr;
-    draw_input_box(input_win, prompt, input, cursor_x - INPUT_TITLE_LEN);
+    draw_input_box(stdscr, prompt, input, cursor_x - INPUT_TITLE_LEN);
     bool exit          = false;
     bool exit_selected = false;
-    while ((ch = wgetch(stdscr)) != ERR)
+    while ((ch = getch()) != ERR)
     {
         if (ch == 27)  // ESC to exit
         {
@@ -296,7 +295,7 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
         else
         {
             curs_set(true);
-            draw_input_box(input_win, prompt, input, cursor_x - INPUT_TITLE_LEN);
+            draw_input_box(stdscr, prompt, input, cursor_x - INPUT_TITLE_LEN);
         }
     }
 

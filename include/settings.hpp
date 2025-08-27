@@ -4,6 +4,7 @@
 #include "rapidjson/document.h"
 #include "util.hpp"
 
+#define MANIFEST_NAME "ulpm.json"
 namespace Settings
 {
 inline struct ManiSettings
@@ -13,9 +14,10 @@ inline struct ManiSettings
     std::string license;
     std::string project_name;
     std::string project_description;
-    std::string project_version;
-    std::string js_main;
-    std::string author;
+    std::string project_version = "v0.0.1";
+    std::string js_main_src = "src/main.js";
+    std::string js_runtime;
+    std::string author = "Name <email@example.com>";
 } manifest_defaults;
 
 class Manifest
@@ -25,7 +27,6 @@ public:
     void init_project(struct cmd_options_t& cmd_options);
 
 private:
-    const std::string   _manifest_name = "ulpm.json";
     std::FILE*          m_file;
     rapidjson::Document m_doc;
     ManiSettings&       m_settings;

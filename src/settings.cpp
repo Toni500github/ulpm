@@ -1,3 +1,4 @@
+#define RAPIDJSON_HAS_STDSTRING 1
 #include "settings.hpp"
 
 #include <cstdio>
@@ -24,9 +25,6 @@ struct Hashes
     int pm;
 };
 
-std::string err_msg;
-static void err_msg_func(const char* buf, size_t n) { err_msg.assign(buf, n); };
-
 static void write_to_json(std::FILE* file, rapidjson::Document& doc)
 {
     // seek back to the beginning to overwrite
@@ -52,7 +50,7 @@ static void autogen_empty_json(const std::string_view name)
     }
 }
 
-static void populate_doc(std::FILE *file, rapidjson::Document& doc)
+static void populate_doc(std::FILE* file, rapidjson::Document& doc)
 {
     if (!file)
     {
@@ -73,10 +71,10 @@ static void populate_doc(std::FILE *file, rapidjson::Document& doc)
 
 static bool download_license(const std::string& license)
 {
-    const std::string url = "https://raw.githubusercontent.com/spdx/license-list-data/master/text/" + license + ".txt";
-    if (Process("curl -L " + url + " -o LICENSE.txt", "", nullptr, err_msg_func).get_exit_status() != 0)
+    const std::string& url = "https://raw.githubusercontent.com/spdx/license-list-data/master/text/" + license + ".txt";
+    if (Process("curl -L " + url + " -o LICENSE.txt").get_exit_status() != 0)
     {
-        error("Failed to download to file LICENSE.txt: {}", err_msg);
+        error("Failed to download to file LICENSE.txt");
         return false;
     }
 
@@ -86,30 +84,30 @@ static bool download_license(const std::string& license)
 static void generate_js_package_json(const ManiSettings& settings)
 {
     autogen_empty_json("package.json");
-    std::FILE* file = fopen("package.json", "r+");
+    std::FILE*          file = fopen("package.json", "r+");
     rapidjson::Document doc;
     populate_doc(file, doc);
     auto& alloc = doc.GetAllocator();
 
-    doc.AddMember("name", rapidjson::Value(settings.project_name.c_str(), settings.project_name.size()), alloc);
-    doc.AddMember("version", rapidjson::Value(settings.project_version.c_str(), settings.project_version.size()), alloc);
-    doc.AddMember("description", rapidjson::Value(settings.project_description.c_str(), settings.project_description.size()), alloc);
-    doc.AddMember("main", rapidjson::Value(settings.js_main.c_str(), settings.js_main.size()), alloc);
+    doc.AddMember("name", settings.project_name, alloc);
+    doc.AddMember("version", settings.project_version, alloc);
+    doc.AddMember("description", settings.project_description, alloc);
+    doc.AddMember("main", settings.js_main_src, alloc);
     doc.AddMember("scripts", rapidjson::Value(rapidjson::kObjectType), alloc);
-    doc["scripts"].AddMember("test", rapidjson::Value("echo \"Error: no test specified\" && exit 1"), alloc);
+    doc["scripts"].AddMember("start", settings.js_runtime + " " + settings.js_main_src, alloc);
     doc.AddMember("keywords", rapidjson::Value(rapidjson::kArrayType), alloc);
-    doc.AddMember("author", rapidjson::Value(settings.author.c_str(), settings.author.size()), alloc);
-    doc.AddMember("license", rapidjson::Value(settings.license.c_str(), settings.license.size()), alloc);
-    doc.AddMember("type", rapidjson::Value("commonjs"), alloc);
+    doc.AddMember("author", settings.author, alloc);
+    doc.AddMember("license", settings.license, alloc);
+    doc.AddMember("type", "commonjs", alloc);
     write_to_json(file, doc);
-    
+
     fclose(file);
 }
 
 Manifest::Manifest() : m_settings(manifest_defaults)
 {
-    autogen_empty_json(_manifest_name);
-    m_file = fopen(_manifest_name.c_str(), "r+");
+    autogen_empty_json(MANIFEST_NAME);
+    m_file = fopen(MANIFEST_NAME, "r+");
     populate_doc(m_file, m_doc);
 }
 
@@ -125,36 +123,40 @@ void Manifest::init_project(struct cmd_options_t& cmd_options)
 
     Hashes hashes;
 
-    m_settings.language = draw_entry_menu({ "javascript", "rust (WIP)", "c++ (WIP)" },
-                                          "Which language do you want to use?", m_settings.language);
+    m_settings.language = draw_entry_menu("Which language do you want to use?",
+                                          { "javascript", "rust (WIP)", "c++ (WIP)" }, m_settings.language);
     hashes.language     = fnv1a16::hash(m_settings.language);
     switch (hashes.language)
     {
         case "javascript"_fnv1a16:
-            m_settings.prefered_pm = draw_entry_menu(
-                { "npm", "yarn", "pnpm" }, "Choose a preferred package manager to use", m_settings.prefered_pm);
+            m_settings.prefered_pm = draw_entry_menu("Choose a preferred package manager to use",
+                                                     { "npm", "yarn", "pnpm" }, m_settings.prefered_pm);
+            m_settings.js_runtime =
+                draw_entry_menu("Choose a Javascript runtime", { "node", "bun", "deno", "qjs", "d8", "jsc", "js" },
+                                m_settings.js_runtime);
             break;
         default: die("language '{}' is indeed WIP", m_settings.language);
     }
 
-    m_settings.project_name        = draw_input_menu("Name of the project:", m_settings.project_name);
-    m_settings.project_description = draw_input_menu("Description of the project:", m_settings.project_description);
-    m_settings.project_version     = draw_input_menu("Initial Version of the project (sugg. 0.0.1):", m_settings.project_version);
-    m_settings.author              = draw_input_menu("Author of the project (e.g 'Name <email@example.com>'):", m_settings.author);
+    m_settings.project_name        = draw_input_menu("Name of the project", m_settings.project_name);
+    m_settings.project_description = draw_input_menu("Description of the project", m_settings.project_description);
+    m_settings.project_version     = draw_input_menu("Initial Version of the project", m_settings.project_version);
+    m_settings.author              = draw_input_menu("Author of the project", m_settings.author);
     if (m_settings.language == "javascript")
-        m_settings.js_main         = draw_input_menu("Main javascript entry (e.g 'main.js')", m_settings.js_main);
+        m_settings.js_main_src = draw_input_menu("Path to main javascript entry", m_settings.js_main_src);
 
-    m_settings.license = draw_entry_menu({ "Apache-2.0",        "BSD-2-Clause",  "BSD-3-Clause",      "GPL-2.0-only",
+    m_settings.license = draw_entry_menu("Choose a license for the project",
+                                         { "Apache-2.0",        "BSD-2-Clause",  "BSD-3-Clause",      "GPL-2.0-only",
                                            "GPL-2.0-or-later",  "GPL-3.0-only",  "GPL-3.0-or-later",  "LGPL-2.1-only",
                                            "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later", "MIT",
                                            "MPL-2.0",           "AGPL-3.0-only", "AGPL-3.0-or-later", "EPL-1.0",
                                            "EPL-2.0",           "CDDL-1.0",      "Unlicense",         "CC0-1.0",
-                                           "Custom license" },
-                                         "Choose a license for the project", m_settings.license);
+                                           "None" },
+                                         m_settings.license);
     create_manifest(m_file);
     fclose(m_file);
 
-    if (m_settings.license != "Custom license")
+    if (m_settings.license != "None")
     {
         if (fs::exists("LICENSE.txt") && !cmd_options.init_force)
             warn("LICENSE.txt already exists, skipping download");
@@ -171,28 +173,34 @@ void Manifest::init_project(struct cmd_options_t& cmd_options)
     {
         info("Creating package.json ...");
         generate_js_package_json(m_settings);
-        info("Done!");
+
+        info("Creating main entry at '{}' ...", m_settings.js_main_src);
+        const fs::path& js_main_src_path = fs::path(m_settings.js_main_src);
+        fs::create_directories(js_main_src_path.parent_path());
+        auto f = fmt::output_file(js_main_src_path.string(), fmt::file::CREATE | fmt::file::RDWR);
+        f.print("console.log('Hello World!');");
+        f.close();
     }
+    info("Done!");
 }
 
 void Manifest::create_manifest(std::FILE* file)
 {
     rapidjson::Document::AllocatorType& allocator = m_doc.GetAllocator();
-    m_doc.AddMember("project_name",
-                    rapidjson::Value(m_settings.project_name.c_str(), m_settings.project_name.size(), allocator),
-                    allocator);
-    m_doc.AddMember(
-        "project_description",
-        rapidjson::Value(m_settings.project_description.c_str(), m_settings.project_description.size(), allocator),
-        allocator);
-    m_doc.AddMember("project_version", rapidjson::Value(m_settings.project_version.c_str(), m_settings.project_version.size()), allocator);
-    m_doc.AddMember("author", rapidjson::Value(m_settings.author.c_str(), m_settings.author.size()), allocator);
-    m_doc.AddMember("license", rapidjson::Value(m_settings.license.c_str(), m_settings.license.size(), allocator),
-                    allocator);
-    m_doc.AddMember("language", rapidjson::Value(m_settings.language.c_str(), m_settings.language.size(), allocator),
-                    allocator);
-    m_doc.AddMember("pm", rapidjson::Value(m_settings.prefered_pm.c_str(), m_settings.prefered_pm.size(), allocator),
-                    allocator);
+    m_doc.AddMember("project_name", m_settings.project_name, allocator);
+    m_doc.AddMember("project_description", m_settings.project_description, allocator);
+    m_doc.AddMember("project_version", m_settings.project_version, allocator);
+    m_doc.AddMember("author", m_settings.author, allocator);
+    m_doc.AddMember("license", m_settings.license, allocator);
+    m_doc.AddMember("language", m_settings.language, allocator);
+    m_doc.AddMember("package_manager", m_settings.prefered_pm, allocator);
+    m_doc.AddMember(rapidjson::Value(m_settings.language.c_str(), m_settings.language.size()),
+                    rapidjson::Value(rapidjson::kObjectType), allocator);
+
+    if (m_settings.language == "javascript")
+    {
+        m_doc[m_settings.language].AddMember("runtime", m_settings.js_runtime, allocator);
+    }
 
     write_to_json(file, m_doc);
 }

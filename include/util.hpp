@@ -91,6 +91,6 @@ struct cmd_options_t
 
 bool        hasStart(const std::string_view fullString, const std::string_view start);
 int         str_to_enum(const std::unordered_map<std::string, int>& map, const std::string_view name);
-std::string draw_entry_menu(const std::vector<std::string>& entries, const std::string& text,
+std::string draw_entry_menu(const std::string& prompt, const std::vector<std::string>& entries,
                             const std::string& default_option);
 std::string draw_input_menu(const std::string& prompt, const std::string& default_option);

@@ -183,7 +183,7 @@ void draw_input_box(WINDOW* win, const std::string& prompt, const std::string& i
 
     // Draw prompt
     wattron(win, A_BOLD);
-    mvwprintw(win, 1, 2, "%s", prompt.c_str());
+    mvwprintw(win, 1, 2, "%s:", prompt.c_str());
     wattroff(win, A_BOLD);
 
     // Calculate available space for input field (considering prompt and borders)

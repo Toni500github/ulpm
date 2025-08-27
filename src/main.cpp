@@ -28,7 +28,6 @@ enum OPs
 } op = NONE;
 
 static const std::unordered_map<std::string_view, OPs> map{
-    { "install", INSTALL },
     { "init", INIT },
 };
 
@@ -44,7 +43,7 @@ OPs str_to_enum(const std::string_view name)
 void version()
 {
     fmt::print(
-        "cufetchpm {} built from branch '{}' at {} commit '{}' ({}).\n"
+        "ulpm {} built from branch '{}' at {} commit '{}' ({}).\n"
         "Date: {}\n"
         "Tag: {}\n",
         VERSION, GIT_BRANCH, GIT_DIRTY, GIT_COMMIT_HASH, GIT_COMMIT_MESSAGE, GIT_COMMIT_DATE, GIT_TAG);
@@ -106,10 +105,11 @@ bool parse_init_args(int argc, char* argv[])
         {"help",  no_argument, nullptr, 'h'},
 
         {"language",            required_argument, nullptr, "language"_fnv1a16},
-        {"pm",                  required_argument, nullptr, "pm"_fnv1a16},
+        {"package_manager",     required_argument, nullptr, "package_manager"_fnv1a16},
         {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
         {"license",             required_argument, nullptr, "license"_fnv1a16},
         {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
+        {"author",              required_argument, nullptr, "author"_fnv1a16},
         {0, 0, 0, 0}
     };
     // clang-format on
@@ -127,10 +127,11 @@ bool parse_init_args(int argc, char* argv[])
             case 'y': cmd_options.init_yes = true; break;
 
             case "language"_fnv1a16:            Settings::manifest_defaults.language = optarg; break;
-            case "pm"_fnv1a16:                  Settings::manifest_defaults.prefered_pm = optarg; break;
+            case "package_manager"_fnv1a16:     Settings::manifest_defaults.prefered_pm = optarg; break;
             case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
             case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
             case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
+            case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
         }
     }
 
