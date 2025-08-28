@@ -26,6 +26,7 @@
 #pragma once
 
 #include <cstdlib>
+#include <iostream>
 #include <unordered_map>
 #include <vector>
 
@@ -35,6 +36,11 @@
 #define UNKNOWN "(unknown)"
 
 #define BOLD_COLOR(x) (fmt::emphasis::bold | fmt::fg(fmt::rgb(x)))
+
+/* Write error message and exit if EOF (or CTRL-D most of the time)
+ * @param cin The std::cin used for getting the input
+ */
+void ctrl_d_handler(const std::istream& cin);
 
 #if DEBUG
 inline bool debug_print = true;
@@ -79,15 +85,35 @@ void info(const std::string_view fmt, Args&&... args) noexcept
                fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
 }
 
-#undef BOLD_COLOR
-
-struct cmd_options_t
+/** Ask the user a yes or no question.
+ * @param def The default result
+ * @param fmt The format string
+ * @param args Arguments in the format
+ * @returns the result, y = true, n = false, only returns def if the result is def
+ */
+template <typename... Args>
+bool askUserYorN(bool def, const std::string_view fmt, Args&&... args)
 {
-    bool                     install_force = false;
-    bool                     init_force    = false;
-    bool                     init_yes      = false;
-    std::vector<std::string> arguments;
-};
+    const std::string& inputs_str = fmt::format(" [{}]: ", def ? "Y/n" : "y/N");
+    std::string        result;
+    fmt::print(fmt::runtime(fmt), std::forward<Args>(args)...);
+    fmt::print("{}", inputs_str);
+
+    while (std::getline(std::cin, result) && (result.length() > 1))
+        warn("Please answear y or n {}", inputs_str);
+
+    ctrl_d_handler(std::cin);
+
+    if (result.empty())
+        return def;
+
+    if (def ? std::tolower(result[0]) != 'n' : std::tolower(result[0]) != 'y')
+        return def;
+
+    return !def;
+}
+
+#undef BOLD_COLOR
 
 bool        hasStart(const std::string_view fullString, const std::string_view start);
 int         str_to_enum(const std::unordered_map<std::string, int>& map, const std::string_view name);

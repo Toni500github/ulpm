@@ -23,12 +23,15 @@
 enum OPs
 {
     NONE,
-    INSTALL,
     INIT,
+    RUN,
+    SET,
 } op = NONE;
 
 static const std::unordered_map<std::string_view, OPs> map{
     { "init", INIT },
+    { "run", RUN },
+    { "set", SET },
 };
 
 struct cmd_options_t cmd_options;
@@ -52,21 +55,14 @@ void version()
     std::exit(EXIT_SUCCESS);
 }
 
-void help(int invalid_opt = false)
+void help(const std::string_view help_msg, int invalid_opt = false)
 {
-    fmt::print(FMT_COMPILE("{}"), cufetchpm_help);
+    fmt::print(FMT_COMPILE("{}"), help_msg);
 
     std::exit(invalid_opt);
 }
 
-void help_install(int invalid_opt = false)
-{
-    fmt::print(FMT_COMPILE("{}"), cufetchpm_help_install);
-
-    std::exit(invalid_opt);
-}
-
-bool parse_install_args(int argc, char* argv[])
+bool parse_run_args(int argc, char* argv[])
 {
     // clang-format off
     const struct option long_opts[] = {
@@ -81,9 +77,8 @@ bool parse_install_args(int argc, char* argv[])
     {
         switch (opt)
         {
-            case 'f': cmd_options.install_force = true; break;
-            case 'h': help_install(EXIT_SUCCESS); break;
-            case '?': help_install(EXIT_FAILURE); break;
+            case 'h': help(ulpm_help_run, EXIT_SUCCESS); break;
+            case '?': help(ulpm_help_run, EXIT_FAILURE); break;
         }
     }
 
@@ -91,12 +86,12 @@ bool parse_install_args(int argc, char* argv[])
         cmd_options.arguments.emplace_back(argv[i]);
 
     if (cmd_options.arguments.empty())
-        die("install: no repositories/paths given");
+        die("run: no arguments given");
 
     return true;
 }
 
-bool parse_init_args(int argc, char* argv[])
+bool parse_init_args(int argc, char* argv[], bool is_op_set)
 {
     // clang-format off
     const struct option long_opts[] = {
@@ -120,20 +115,22 @@ bool parse_init_args(int argc, char* argv[])
         switch (opt)
         {
             case 0:   break;
-            case '?': help_install(EXIT_FAILURE); break;
+            case '?': help(is_op_set ? ulpm_help_set : ulpm_help_init, EXIT_FAILURE); break;
+            case 'h': help(is_op_set ? ulpm_help_set : ulpm_help_init, EXIT_SUCCESS); break;
 
-            case 'h': help_install(EXIT_SUCCESS); break;
-            case 'f': cmd_options.install_force = true; break;
+            case 'f': cmd_options.init_force = true; break;
             case 'y': cmd_options.init_yes = true; break;
 
             case "language"_fnv1a16:            Settings::manifest_defaults.language = optarg; break;
-            case "package_manager"_fnv1a16:     Settings::manifest_defaults.prefered_pm = optarg; break;
+            case "package_manager"_fnv1a16:     Settings::manifest_defaults.package_manager = optarg; break;
             case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
             case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
             case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
             case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
         }
     }
+    if (is_op_set)
+        cmd_options.init_force = true;
 
     return true;
 }
@@ -152,8 +149,8 @@ bool parse_general_command_args(int argc, char* argv[])
     {
         switch (opt)
         {
-            case 'h': help(EXIT_SUCCESS); break;
-            case '?': help_install(EXIT_FAILURE); break;
+            case 'h': help(ulpm_help, EXIT_SUCCESS); break;
+            case '?': help(ulpm_help, EXIT_FAILURE); break;
         }
     }
 
@@ -168,11 +165,12 @@ static bool parseargs(int argc, char* argv[])
     // clang-format off
     int opt = 0;
     int option_index = 0;
-    const char *optstring = "+Vh";
+    const char *optstring = "+Vvh";
     static const struct option opts[] = {
         {"version", no_argument, 0, 'V'},
         {"help",    no_argument, 0, 'h'},
 
+        {"verbose", no_argument, 0, 'v'},
         {0,0,0,0}
     };
 
@@ -183,16 +181,17 @@ static bool parseargs(int argc, char* argv[])
         switch (opt)
         {
             case 0:   break;
-            case '?': help(EXIT_FAILURE); break;
+            case '?': help(ulpm_help, EXIT_FAILURE); break;
 
             case 'V': version(); break;
-            case 'h': help(); break;
+            case 'h': help(ulpm_help, EXIT_SUCCESS); break;
+            case 'v': cmd_options_verbose = true; break;
             default:  return false;
         }
     }
 
     if (optind >= argc)
-        help(EXIT_FAILURE);  // no subcommand
+        help(ulpm_help, EXIT_FAILURE);  // no subcommand
 
     std::string_view cmd      = argv[optind];
     int              sub_argc = argc - optind - 1;
@@ -201,9 +200,10 @@ static bool parseargs(int argc, char* argv[])
     op = str_to_enum(cmd);
     switch (op)
     {
-        case INSTALL: optind = 0; return parse_install_args(sub_argc, sub_argv);
-        case INIT:    optind = 0; return parse_init_args(sub_argc, sub_argv);
-        default:      optind = 0; return parse_general_command_args(sub_argc, sub_argv);
+        case RUN:  optind = 0; return parse_run_args(sub_argc, sub_argv);
+        case INIT:
+        case SET:  optind = 0; return parse_init_args(sub_argc, sub_argv, op == SET);
+        default:   optind = 0; return parse_general_command_args(sub_argc, sub_argv);
     }
 
     return true;
@@ -211,13 +211,14 @@ static bool parseargs(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
+    Settings::Manifest man;
     if (!parseargs(argc, argv))
         return -1;
 
     setlocale(LC_ALL, "");
-    if (op == INIT)
+
+    if (op == INIT || op == SET)
     {
-        Settings::Manifest man;
         if (!cmd_options.init_yes)
         {
             initscr();
@@ -227,6 +228,13 @@ int main(int argc, char* argv[])
             curs_set(1);           // Show cursor
         }
         man.init_project(cmd_options);
+    }
+
+    else if (op == RUN)
+    {
+        const std::string cmd = cmd_options.arguments[0];
+        cmd_options.arguments.erase(cmd_options.arguments.begin());
+        man.run_cmd(cmd, cmd_options.arguments);
     }
 
     return 0;

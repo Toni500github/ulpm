@@ -29,6 +29,12 @@ int str_to_enum(const std::unordered_map<std::string, int>& map, const std::stri
     return -1;
 }
 
+void ctrl_d_handler(const std::istream& cin)
+{
+    if (cin.eof())
+        die("Exiting due to CTRL-D or EOF");
+}
+
 static size_t remove_entries(std::vector<std::string>& results_value, const std::string& query)
 {
     auto new_end = std::remove_if(results_value.begin(), results_value.end(),

@@ -45,7 +45,7 @@ SRC	 	 = $(wildcard src/*.cpp)
 OBJ	 	 = $(SRC:.cpp=.o)
 LDFLAGS   	+= -L$(BUILDDIR)
 LDLIBS		+= $(wildcard $(BUILDDIR)/*.a) -lncursesw
-CXXFLAGS        += $(LTO_FLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -Iinclude -Iinclude/libs -std=$(CXXSTD) $(VARS) -DVERSION=\"$(VERSION)\" -DLOCALEDIR=\"$(LOCALEDIR)\" -DICONPREFIX=\"$(ICONPREFIX)\"
+CXXFLAGS        += $(LTO_FLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -Iinclude -Iinclude/libs -std=$(CXXSTD) $(VARS) -DVERSION=\"$(VERSION)\"
 
 all: genver fmt tpl getopt-port $(TARGET)
 

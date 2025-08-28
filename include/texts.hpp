@@ -29,29 +29,88 @@
 #include <string_view>
 
 // cufetchpm
-inline constexpr std::string_view cufetchpm_help = (R"(Usage: ulpm <COMMAND(s)...> ...
-Manage all your projects with multiple languages on a single command universally.
+inline constexpr std::string_view ulpm_help = (R"(Usage: ulpm <command> [options]
+
+Manage projects across multiple languages with a single universal CLI.
 
 Commands:
-    init                Initialize a project.
+    init                Initialize a new project with interactive prompts.
+    set                 Modify settings in the manifest (equivalent to `init -f`).
+    run <script>        Run a script using the chosen package manager (currently JavaScript only).
 
 Global options:
-    -h, --help          Show this help message.
-    -V, --version       Show version and build information.
-
+    -h, --help          Show this help message
+    -V, --version       Show version and build information
+    -v, --verbose       Show output of executed commands
 )");
 
-inline constexpr std::string_view cufetchpm_help_install = (R"(Usage: cufetchpm install [options] <source>...
+inline constexpr std::string_view ulpm_help_init = (R"(Usage: ulpm init [options]
 
-Install one or more plugin sources. If a given argument exists on disk,
-it is treated as a local directory. Otherwise, it is treated as a Git
-repository URL and will be cloned.
-
-All plugins found within the source will be installed.
+Initialize a new project with interactive prompts, or set defaults directly via options.
 
 Options:
-    -f, --force        Force installation, even if already installed.
-    -h, --help         Show help for this command.
+    -f, --force                  Overwrite existing project files
+    -y, --yes                    Skip prompts and use default values
+    -h, --help                   Show this help message
+
+Manifest options:
+        --language <lang>        Set the project language (e.g. rust, javascript)
+        --package_manager <pm>   Specify package manager (e.g. npm, yarn)
+        --project_name <name>    Name of the project
+        --license <license>      Project license (e.g. MIT, GPL-3.0)
+        --project_description    Short description of the project
+        --author <author>        Author name and info
+
+Examples:
+    ulpm init
+        Run interactive prompts to create a new project.
+
+    ulpm init --language cpp --project_name MyApp --license MIT -y
+        Initialize a C++ project named "MyApp" with license MIT, skipping prompts.
+
+    ulpm init -f
+        Re-initialize an existing project, overwriting manifest.
 )");
 
+inline constexpr std::string_view ulpm_help_set = (R"(Usage: ulpm set [options]
+
+Modify project settings in the manifest. Equivalent to running `ulpm init --force`.
+
+Options:
+    -h, --help                   Show this help message
+
+Manifest options:
+        --language <lang>        Set the project language (e.g. rust, javascript)
+        --package_manager <pm>   Specify package manager (e.g. npm, yarn)
+        --project_name <name>    Name of the project
+        --license <license>      Project license (e.g. MIT, GPL-3.0)
+        --project_description    Short description of the project
+        --author <author>        Author name and info
+
+Examples:
+    ulpm set --language javascript --package_manager yarn
+        Update the project manifest to use javascript and yarn.
+
+    ulpm set --license GPL-3.0
+        Change the project license to GPL-3.0.
+
+    ulpm set --author "Jane Doe <jane@example.com>"
+        Update the author field in the manifest.
+)");
+
+inline constexpr std::string_view ulpm_help_run = (R"(
+Usage: ulpm run [options] <script> [args...]
+
+Run a script using the chosen package manager (currently JavaScript only).
+
+Options:
+    -h, --help           Show this help message
+
+Examples:
+    ulpm run build
+        Run the "build" script from package.json.
+
+    ulpm run test -- --watch
+        Run the "test" script and pass "--watch" as an extra argument.
+)");
 #endif  // !_TEXTS_HPP_

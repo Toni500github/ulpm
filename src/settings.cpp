@@ -1,11 +1,16 @@
 #define RAPIDJSON_HAS_STDSTRING 1
 #include "settings.hpp"
 
+#include <unistd.h>
+
 #include <cstdio>
 #include <filesystem>
 #include <string_view>
+#include <vector>
 
+#include "fmt/format.h"
 #include "fmt/os.h"
+#include "fmt/ranges.h"
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 #include "rapidjson/filereadstream.h"
@@ -19,11 +24,8 @@
 using namespace Settings;
 using namespace TinyProcessLib;
 namespace fs = std::filesystem;
-struct Hashes
-{
-    int language;
-    int pm;
-};
+
+#define VERBOSE_STDOUT !cmd_options_verbose ? nullptr : [](const char*, size_t){}
 
 static void write_to_json(std::FILE* file, rapidjson::Document& doc)
 {
@@ -42,12 +44,9 @@ static void write_to_json(std::FILE* file, rapidjson::Document& doc)
 
 static void autogen_empty_json(const std::string_view name)
 {
-    if (!fs::exists(name))
-    {
-        auto f = fmt::output_file(name.data(), fmt::file::CREATE | fmt::file::WRONLY);
-        f.print("{{}}");
-        f.close();
-    }
+    auto f = fmt::output_file(name.data(), fmt::file::CREATE | fmt::file::WRONLY | fmt::file::TRUNC);
+    f.print("{{}}");
+    f.close();
 }
 
 static void populate_doc(std::FILE* file, rapidjson::Document& doc)
@@ -64,7 +63,7 @@ static void populate_doc(std::FILE* file, rapidjson::Document& doc)
     if (doc.ParseStream(stream).HasParseError())
     {
         fclose(file);
-        die("Failed to parse {}: {} at offset {}", rapidjson::GetParseError_En(doc.GetParseError()),
+        die("Failed to parse json file: {} at offset {}", rapidjson::GetParseError_En(doc.GetParseError()),
             doc.GetErrorOffset());
     };
 }
@@ -72,7 +71,7 @@ static void populate_doc(std::FILE* file, rapidjson::Document& doc)
 static bool download_license(const std::string& license)
 {
     const std::string& url = "https://raw.githubusercontent.com/spdx/license-list-data/master/text/" + license + ".txt";
-    if (Process("curl -L " + url + " -o LICENSE.txt").get_exit_status() != 0)
+    if (Process("curl -L " + url + " -o LICENSE.txt", "", VERBOSE_STDOUT).get_exit_status() != 0)
     {
         error("Failed to download to file LICENSE.txt");
         return false;
@@ -106,31 +105,67 @@ static void generate_js_package_json(const ManiSettings& settings)
 
 Manifest::Manifest() : m_settings(manifest_defaults)
 {
-    autogen_empty_json(MANIFEST_NAME);
+    if (!fs::exists(MANIFEST_NAME))
+        autogen_empty_json(MANIFEST_NAME);
     m_file = fopen(MANIFEST_NAME, "r+");
     populate_doc(m_file, m_doc);
+    if (m_doc.ObjectEmpty())
+        return;
+
+    if (m_doc.HasMember("language") && m_doc["language"].IsString())
+        m_settings.language = m_doc["language"].GetString();
+
+    if (m_doc.HasMember("package_manager") && m_doc["package_manager"].IsString())
+        m_settings.package_manager = m_doc["package_manager"].GetString();
+
+    if (m_doc.HasMember("license") && m_doc["license"].IsString())
+        m_settings.license = m_doc["license"].GetString();
+
+    if (m_doc.HasMember("project_name") && m_doc["project_name"].IsString())
+        m_settings.project_name = m_doc["project_name"].GetString();
+
+    if (m_doc.HasMember("project_description") && m_doc["project_description"].IsString())
+        m_settings.project_description = m_doc["project_description"].GetString();
+
+    if (m_doc.HasMember("project_version") && m_doc["project_version"].IsString())
+        m_settings.project_version = m_doc["project_version"].GetString();
+
+    if (m_doc.HasMember("author") && m_doc["author"].IsString())
+        m_settings.author = m_doc["author"].GetString();
+
+    if (m_doc.HasMember("javascript") && m_doc["javascript"].IsObject())
+        m_settings.js_runtime = m_doc["javascript"]["runtime"].GetString();
 }
 
-void Manifest::init_project(struct cmd_options_t& cmd_options)
+void Manifest::init_project(const cmd_options_t& cmd_options)
 {
+    if (!m_doc.ObjectEmpty())
+    {
+        if (cmd_options.init_force || askUserYorN(false, "The manifest {} is not empty. Do you want to overwrite all options?", MANIFEST_NAME))
+        {
+
+            fclose(m_file);
+            m_file = fopen(MANIFEST_NAME, "w+");
+            autogen_empty_json(MANIFEST_NAME);
+            populate_doc(m_file, m_doc);
+            autogen_empty_json("package.json");
+            fclose(m_file);
+            m_file = fopen(MANIFEST_NAME, "r+");
+        }
+    }
     // --yes doesn't open menus and accept only my cli arguments
     if (cmd_options.init_yes)
     {
-        create_manifest(m_file);
-        fclose(m_file);
-        return;
+        goto skip_menu;
     }
-
-    Hashes hashes;
 
     m_settings.language = draw_entry_menu("Which language do you want to use?",
                                           { "javascript", "rust (WIP)", "c++ (WIP)" }, m_settings.language);
-    hashes.language     = fnv1a16::hash(m_settings.language);
-    switch (hashes.language)
+    switch (fnv1a16::hash(m_settings.language))
     {
         case "javascript"_fnv1a16:
-            m_settings.prefered_pm = draw_entry_menu("Choose a preferred package manager to use",
-                                                     { "npm", "yarn", "pnpm" }, m_settings.prefered_pm);
+            m_settings.package_manager = draw_entry_menu("Choose a preferred package manager to use",
+                                                         { "npm", "yarn", "pnpm" }, m_settings.package_manager);
             m_settings.js_runtime =
                 draw_entry_menu("Choose a Javascript runtime", { "node", "bun", "deno", "qjs", "d8", "jsc", "js" },
                                 m_settings.js_runtime);
@@ -146,13 +181,15 @@ void Manifest::init_project(struct cmd_options_t& cmd_options)
         m_settings.js_main_src = draw_input_menu("Path to main javascript entry", m_settings.js_main_src);
 
     m_settings.license = draw_entry_menu("Choose a license for the project",
-                                         { "Apache-2.0",        "BSD-2-Clause",  "BSD-3-Clause",      "GPL-2.0-only",
-                                           "GPL-2.0-or-later",  "GPL-3.0-only",  "GPL-3.0-or-later",  "LGPL-2.1-only",
-                                           "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later", "MIT",
-                                           "MPL-2.0",           "AGPL-3.0-only", "AGPL-3.0-or-later", "EPL-1.0",
-                                           "EPL-2.0",           "CDDL-1.0",      "Unlicense",         "CC0-1.0",
-                                           "None" },
+                                         { "Apache-2.0",       "BSD-2-Clause",      "BSD-3-Clause",
+                                           "GPL-2.0-only",     "GPL-2.0-or-later",  "GPL-3.0-only",
+                                           "GPL-3.0-or-later", "LGPL-2.1-only",     "LGPL-2.1-or-later",
+                                           "LGPL-3.0-only",    "LGPL-3.0-or-later", "MIT",
+                                           "MPL-2.0",          "AGPL-3.0-only",     "AGPL-3.0-or-later",
+                                           "EPL-1.0",          "EPL-2.0",           "CDDL-1.0",
+                                           "Unlicense",        "CC0-1.0",           "None" },
                                          m_settings.license);
+skip_menu:
     create_manifest(m_file);
     fclose(m_file);
 
@@ -177,7 +214,7 @@ void Manifest::init_project(struct cmd_options_t& cmd_options)
         info("Creating main entry at '{}' ...", m_settings.js_main_src);
         const fs::path& js_main_src_path = fs::path(m_settings.js_main_src);
         fs::create_directories(js_main_src_path.parent_path());
-        auto f = fmt::output_file(js_main_src_path.string(), fmt::file::CREATE | fmt::file::RDWR);
+        auto f = fmt::output_file(js_main_src_path.string(), fmt::file::CREATE | fmt::file::WRONLY);
         f.print("console.log('Hello World!');");
         f.close();
     }
@@ -193,7 +230,7 @@ void Manifest::create_manifest(std::FILE* file)
     m_doc.AddMember("author", m_settings.author, allocator);
     m_doc.AddMember("license", m_settings.license, allocator);
     m_doc.AddMember("language", m_settings.language, allocator);
-    m_doc.AddMember("package_manager", m_settings.prefered_pm, allocator);
+    m_doc.AddMember("package_manager", m_settings.package_manager, allocator);
     m_doc.AddMember(rapidjson::Value(m_settings.language.c_str(), m_settings.language.size()),
                     rapidjson::Value(rapidjson::kObjectType), allocator);
 
@@ -203,4 +240,12 @@ void Manifest::create_manifest(std::FILE* file)
     }
 
     write_to_json(file, m_doc);
+}
+
+void Manifest::run_cmd(const std::string& cmd, const std::vector<std::string>& arguments)
+{
+    const std::string& exec = fmt::format("{} run {} {}", m_settings.package_manager, cmd, fmt::join(arguments, " "));
+    debug("Running {}", exec);
+    if (Process(exec, "", VERBOSE_STDOUT).get_exit_status() != 0)
+        die("Failed to run cmd '{}'", cmd);
 }
