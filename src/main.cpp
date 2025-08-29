@@ -91,7 +91,7 @@ bool parse_run_args(int argc, char* argv[])
     return true;
 }
 
-bool parse_init_args(int argc, char* argv[], bool is_op_set)
+bool parse_init_args(int argc, char* argv[])
 {
     // clang-format off
     const struct option long_opts[] = {
@@ -115,8 +115,8 @@ bool parse_init_args(int argc, char* argv[], bool is_op_set)
         switch (opt)
         {
             case 0:   break;
-            case '?': help(is_op_set ? ulpm_help_set : ulpm_help_init, EXIT_FAILURE); break;
-            case 'h': help(is_op_set ? ulpm_help_set : ulpm_help_init, EXIT_SUCCESS); break;
+            case '?': help(ulpm_help_init, EXIT_FAILURE); break;
+            case 'h': help(ulpm_help_init, EXIT_SUCCESS); break;
 
             case 'f': cmd_options.init_force = true; break;
             case 'y': cmd_options.init_yes = true; break;
@@ -129,8 +129,46 @@ bool parse_init_args(int argc, char* argv[], bool is_op_set)
             case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
         }
     }
-    if (is_op_set)
-        cmd_options.init_force = true;
+
+    return true;
+}
+
+bool parse_set_args(int argc, char* argv[])
+{
+    // clang-format off
+    const struct option long_opts[] = {
+        {"force", no_argument, nullptr, 'f'},
+        {"help",  no_argument, nullptr, 'h'},
+
+        {"language",            required_argument, nullptr, "language"_fnv1a16},
+        {"package_manager",     required_argument, nullptr, "package_manager"_fnv1a16},
+        {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
+        {"license",             required_argument, nullptr, "license"_fnv1a16},
+        {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
+        {"author",              required_argument, nullptr, "author"_fnv1a16},
+        {0, 0, 0, 0}
+    };
+    // clang-format on
+
+    int opt;
+    while ((opt = getopt_long(argc, argv, "+fh", long_opts, nullptr)) != -1)
+    {
+        switch (opt)
+        {
+            case 0:   break;
+            case '?': help(ulpm_help_set, EXIT_FAILURE); break;
+            case 'h': help(ulpm_help_set, EXIT_SUCCESS); break;
+
+            case 'f': cmd_options.init_force = true; break;
+
+            case "language"_fnv1a16:            Settings::manifest_defaults.language = optarg; break;
+            case "package_manager"_fnv1a16:     Settings::manifest_defaults.package_manager = optarg; break;
+            case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
+            case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
+            case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
+            case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
+        }
+    }
 
     return true;
 }
@@ -201,8 +239,8 @@ static bool parseargs(int argc, char* argv[])
     switch (op)
     {
         case RUN:  optind = 0; return parse_run_args(sub_argc, sub_argv);
-        case INIT:
-        case SET:  optind = 0; return parse_init_args(sub_argc, sub_argv, op == SET);
+        case INIT: optind = 0; return parse_init_args(sub_argc, sub_argv);
+        case SET:  optind = 0; return parse_set_args(sub_argc, sub_argv);
         default:   optind = 0; return parse_general_command_args(sub_argc, sub_argv);
     }
 
@@ -211,13 +249,17 @@ static bool parseargs(int argc, char* argv[])
 
 int main(int argc, char* argv[])
 {
-    Settings::Manifest man;
     if (!parseargs(argc, argv))
         return -1;
 
     setlocale(LC_ALL, "");
+    if (Settings::manifest_defaults.project_version.empty())
+        Settings::manifest_defaults.project_version = "v0.0.1";
+    if (Settings::manifest_defaults.js_main_src.empty())
+        Settings::manifest_defaults.js_main_src = "src/main.js";
 
-    if (op == INIT || op == SET)
+    Settings::Manifest man;
+    if (op == INIT)
     {
         if (!cmd_options.init_yes)
         {
@@ -229,9 +271,13 @@ int main(int argc, char* argv[])
         }
         man.init_project(cmd_options);
     }
-
+    else if (op == SET)
+    {
+        man.set_project_settings(cmd_options);
+    }
     else if (op == RUN)
     {
+        man.validate_manifest();
         const std::string cmd = cmd_options.arguments[0];
         cmd_options.arguments.erase(cmd_options.arguments.begin());
         man.run_cmd(cmd, cmd_options.arguments);

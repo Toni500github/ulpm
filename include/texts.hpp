@@ -74,7 +74,7 @@ Examples:
 
 inline constexpr std::string_view ulpm_help_set = (R"(Usage: ulpm set [options]
 
-Modify project settings in the manifest. Equivalent to running `ulpm init --force`.
+Modify project settings in ulpm.json the package_manager manifest.
 
 Options:
     -h, --help                   Show this help message
@@ -95,7 +95,7 @@ Examples:
         Change the project license to GPL-3.0.
 
     ulpm set --author "Jane Doe <jane@example.com>"
-        Update the author field in the manifest.
+        Update the author field in the manifests.
 )");
 
 inline constexpr std::string_view ulpm_help_run = (R"(

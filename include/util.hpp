@@ -51,14 +51,14 @@ inline bool debug_print = false;
 template <typename... Args>
 void error(const std::string_view fmt, Args&&... args) noexcept
 {
-    fmt::print(stderr, BOLD_COLOR(fmt::color::red), "ERROR: {}\033[0m\n",
+    fmt::print(stderr, BOLD_COLOR(fmt::color::red), "ulpm: ERROR: {}\033[0m\n",
                fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
 }
 
 template <typename... Args>
 void die(const std::string_view fmt, Args&&... args) noexcept
 {
-    fmt::print(stderr, BOLD_COLOR(fmt::color::red), "FATAL: {}\033[0m\n",
+    fmt::print(stderr, BOLD_COLOR(fmt::color::red), "ulpm: FATAL: {}\033[0m\n",
                fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
     std::exit(1);
 }
@@ -74,14 +74,14 @@ void debug(const std::string_view fmt, Args&&... args) noexcept
 template <typename... Args>
 void warn(const std::string_view fmt, Args&&... args) noexcept
 {
-    fmt::print(stderr, BOLD_COLOR((fmt::color::yellow)), "WARNING: {}\033[0m\n",
+    fmt::print(stderr, BOLD_COLOR((fmt::color::yellow)), "ulpm: WARNING: {}\033[0m\n",
                fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
 }
 
 template <typename... Args>
 void info(const std::string_view fmt, Args&&... args) noexcept
 {
-    fmt::print(BOLD_COLOR((fmt::color::cyan)), "INFO: {}\033[0m\n",
+    fmt::print(BOLD_COLOR((fmt::color::cyan)), "ulpm: INFO: {}\033[0m\n",
                fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
 }
 
