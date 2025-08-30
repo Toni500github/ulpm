@@ -35,7 +35,7 @@ class Manifest
 public:
     Manifest();
     void init_project(const cmd_options_t& cmd_options);
-    void run_cmd(const std::string& cmd, const std::vector<std::string>& arguments);
+    void run_cmd(const std::vector<std::string>& arguments);
     void set_project_settings(const cmd_options_t& cmd_options);
     void validate_manifest();
 

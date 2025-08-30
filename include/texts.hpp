@@ -28,7 +28,7 @@
 
 #include <string_view>
 
-// cufetchpm
+// ulpm
 inline constexpr std::string_view ulpm_help = (R"(Usage: ulpm <command> [options]
 
 Manage projects across multiple languages with a single universal CLI.
@@ -74,7 +74,7 @@ Examples:
 
 inline constexpr std::string_view ulpm_help_set = (R"(Usage: ulpm set [options]
 
-Modify project settings in ulpm.json the package_manager manifest.
+Modify project settings in ulpm.json and package manager manifest.
 
 Options:
     -h, --help                   Show this help message

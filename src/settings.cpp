@@ -35,10 +35,21 @@ constexpr const char* config_json = R"({
             "js_runtimes": ["node", "bun", "deno", "qjs", "d8", "jsc", "js"]
         },
         "rust": {
-            "package_managers": []
+            "package_managers": ["cargo"]
         },
         "c++": {
             "package_managers": []
+        }
+    },
+    "commands": {
+        "npm": {
+            "run": "npm run"
+        },
+        "yarn": {
+            "run": "yarn run"
+        },
+        "cargo": {
+            "run": "cargo run"
         }
     },
     "licenses": [
@@ -88,7 +99,7 @@ static void populate_doc(std::FILE* file, rapidjson::Document& doc)
     if (doc.ParseStream(stream).HasParseError())
     {
         fclose(file);
-        die("Failed to parse json file: {} at offset {}", rapidjson::GetParseError_En(doc.GetParseError()),
+        die("Failed to parse json file: {} At offset {}", rapidjson::GetParseError_En(doc.GetParseError()),
             doc.GetErrorOffset());
     };
 }
@@ -157,19 +168,22 @@ void Manifest::validate_manifest()
     if (!m_doc.HasMember("language") || !m_doc["language"].IsString())
         die("Missing/Non-string field 'language' in {}", MANIFEST_NAME);
     if (!config_doc["languages"].HasMember(m_settings.language))
-        die("Invalid language '{}'. Valid: {}", m_settings.language, fmt::join(vec_from_members(config_doc["languages"]), ", "));
+        die("Invalid language '{}'. Valid: {}", m_settings.language,
+            fmt::join(vec_from_members(config_doc["languages"]), ", "));
 
-    // check package manager
+    // check package_manager
     if (!m_doc.HasMember("package_manager") || !m_doc["package_manager"].IsString())
         die("Missing/Non-string field 'package_manager' in {}", MANIFEST_NAME);
-    const std::vector<std::string>& lang_pm = vec_from_array(config_doc["languages"][m_settings.language]["package_managers"]); 
+    const std::vector<std::string>& lang_pm =
+        vec_from_array(config_doc["languages"][m_settings.language]["package_managers"]);
     if (std::find(lang_pm.begin(), lang_pm.end(), m_settings.package_manager) == lang_pm.end())
-        die("Invalid package manager '{}' for language '{}'. Valid: {}", m_settings.package_manager, m_settings.language, fmt::join(lang_pm, ", "));
+        die("Invalid package manager '{}' for language '{}'. Valid: {}", m_settings.package_manager,
+            m_settings.language, fmt::join(lang_pm, ", "));
 
     // check license
     if (!m_doc.HasMember("license") || !m_doc["license"].IsString())
         die("Missing/Non-string field 'license' in {}", MANIFEST_NAME);
-    const std::vector<std::string>& licenses = vec_from_array(config_doc["licenses"]); 
+    const std::vector<std::string>& licenses = vec_from_array(config_doc["licenses"]);
     if (std::find(licenses.begin(), licenses.end(), m_settings.license) == licenses.end())
         die("Invalid license '{}'. Valid: {}", m_settings.license, fmt::join(licenses, ", "));
 
@@ -321,9 +335,18 @@ void Manifest::create_manifest(std::FILE* file)
     m_doc.AddMember("license", m_settings.license, allocator);
     m_doc.AddMember("language", m_settings.language, allocator);
     m_doc.AddMember("package_manager", m_settings.package_manager, allocator);
+
+    m_doc.AddMember("commands", rapidjson::Value(rapidjson::kObjectType), allocator);
+    m_doc["commands"].AddMember(rapidjson::Value(m_settings.package_manager.c_str(), m_settings.package_manager.size()),
+                                rapidjson::Value(rapidjson::kObjectType), allocator);
+    m_doc["commands"][m_settings.package_manager].AddMember(
+        "run",
+        rapidjson::Value(config_doc["commands"][m_settings.package_manager]["run"].GetString(),
+                         config_doc["commands"][m_settings.package_manager]["run"].GetStringLength()),
+        allocator);
+
     m_doc.AddMember(rapidjson::Value(m_settings.language.c_str(), m_settings.language.size()),
                     rapidjson::Value(rapidjson::kObjectType), allocator);
-
     if (m_settings.language == "javascript")
     {
         m_doc[m_settings.language].AddMember("runtime", m_settings.js_runtime, allocator);
@@ -332,12 +355,13 @@ void Manifest::create_manifest(std::FILE* file)
     write_to_json(file, m_doc);
 }
 
-void Manifest::run_cmd(const std::string& cmd, const std::vector<std::string>& arguments)
+void Manifest::run_cmd(const std::vector<std::string>& arguments)
 {
-    const std::string& exec = fmt::format("{} run {} {}", m_settings.package_manager, cmd, fmt::join(arguments, " "));
+    const std::string& exec = fmt::format("{} {}", m_doc["commands"][m_settings.package_manager]["run"].GetString(),
+                                          fmt::join(arguments, " "));
     debug("Running {}", exec);
     if (Process(exec, "", VERBOSE_STDOUT).get_exit_status() != 0)
-        die("Failed to run cmd '{}'", cmd);
+        die("Failed to execute '{}'", exec);
 }
 
 void Manifest::set_project_settings(const cmd_options_t& cmd_options)
@@ -360,6 +384,16 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
     if (!manifest_defaults.package_manager.empty() && m_settings.package_manager != manifest_defaults.package_manager)
     {
         update_json_field(m_doc, "package_manager", manifest_defaults.package_manager);
+        if (!m_doc["commands"].HasMember(manifest_defaults.package_manager))
+        {
+            m_doc["commands"].AddMember(rapidjson::Value(manifest_defaults.package_manager.c_str(), manifest_defaults.package_manager.size()),
+                                rapidjson::Value(rapidjson::kObjectType), m_doc.GetAllocator());
+            m_doc["commands"][manifest_defaults.package_manager].AddMember(
+                "run",
+                rapidjson::Value(config_doc["commands"][manifest_defaults.package_manager]["run"].GetString(),
+                                 config_doc["commands"][manifest_defaults.package_manager]["run"].GetStringLength()),
+                m_doc.GetAllocator());
+        }
         manifest_updated = true;
     }
 
@@ -367,17 +401,14 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
     {
         update_json_field(m_doc, "license", manifest_defaults.license);
         manifest_updated = true;
-        if ((fs::exists("LICENSE.txt") && !cmd_options.init_force) || manifest_defaults.license != "Custom")
+        if ((fs::exists("LICENSE.txt") && !cmd_options.init_force) || manifest_defaults.license == "Custom")
             warn("LICENSE.txt already exists, use --force to overwrite");
         else
         {
             info("Removing LICENSE.txt");
             fs::remove("LICENSE.txt");
-            if (m_settings.license != "None")
-            {
-                info("Downloading license {} to LICENSE.txt ...", m_settings.license);
-                download_license(m_settings.license);
-            }
+            info("Downloading license {} to LICENSE.txt ...", manifest_defaults.license);
+            download_license(manifest_defaults.license);
         }
     }
 
@@ -426,12 +457,12 @@ void Manifest::update_json_field(rapidjson::Document& pkg_doc, const std::string
 
     if (pkg_doc.HasMember(field))
     {
-        debug("changing {} from {} to {}", field, pkg_doc[field].GetString(), value);
+        debug("changing {} from '{}' to '{}'", field, pkg_doc[field].GetString(), value);
         pkg_doc[field].SetString(value.c_str(), value.length(), allocator);
     }
     else
     {
-        debug("adding {} with value {}", field, value);
+        debug("adding field '{}' with value '{}'", field, value);
         pkg_doc.AddMember(rapidjson::Value(field.c_str(), field.length(), allocator),
                           rapidjson::Value(value.c_str(), value.length(), allocator), allocator);
     }

@@ -257,6 +257,8 @@ int main(int argc, char* argv[])
         Settings::manifest_defaults.project_version = "v0.0.1";
     if (Settings::manifest_defaults.js_main_src.empty())
         Settings::manifest_defaults.js_main_src = "src/main.js";
+    if (Settings::manifest_defaults.js_runtime.empty())
+        Settings::manifest_defaults.js_runtime = "node";
 
     Settings::Manifest man;
     if (op == INIT)
@@ -278,9 +280,7 @@ int main(int argc, char* argv[])
     else if (op == RUN)
     {
         man.validate_manifest();
-        const std::string cmd = cmd_options.arguments[0];
-        cmd_options.arguments.erase(cmd_options.arguments.begin());
-        man.run_cmd(cmd, cmd_options.arguments);
+        man.run_cmd(cmd_options.arguments);
     }
 
     return 0;
