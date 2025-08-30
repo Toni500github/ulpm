@@ -27,9 +27,9 @@ It helps you:
 
 ## Quick Start
 
-### Installation (From Source)
+### From Source
 
-1.  Ensure you have the necessary dependencies: a C++ compiler, Make, and the development files for `ncurses`.
+1.  Ensure you have `ncurses` installed (simply search it with your package manager).
 2.  Clone the repository and build the project:
     ```bash
     git clone --depth=1 https://github.com/Toni500github/ulpm
@@ -37,6 +37,12 @@ It helps you:
     make DEBUG=0
     ./build/release/ulpm
     ```
+
+### From Releases
+
+1.  Ensure you have `ncurses` installed (simply search it with your package manager).
+2.  Download the latest [release](https://github.com/Toni500github/ulpm/releases/latest) based on your OS
+3.  Optional: if no execution permission, run `chmod +x ./ulpm*`
 
 ### Basic Usage
 

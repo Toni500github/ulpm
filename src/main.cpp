@@ -126,6 +126,7 @@ bool parse_init_args(int argc, char* argv[])
         {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
         {"license",             required_argument, nullptr, "license"_fnv1a16},
         {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
+	{"project_version",	required_argument, nullptr, "project_version"_fnv1a16},
         {"author",              required_argument, nullptr, "author"_fnv1a16},
         {0, 0, 0, 0}
     };
@@ -148,6 +149,7 @@ bool parse_init_args(int argc, char* argv[])
             case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
             case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
             case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
+	    case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
             case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
         }
     }
@@ -166,6 +168,7 @@ bool parse_set_args(int argc, char* argv[])
         {"package_manager",     required_argument, nullptr, "package_manager"_fnv1a16},
         {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
         {"license",             required_argument, nullptr, "license"_fnv1a16},
+	{"project_version",     required_argument, nullptr, "project_version"_fnv1a16},
         {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
         {"author",              required_argument, nullptr, "author"_fnv1a16},
         {0, 0, 0, 0}
@@ -188,6 +191,7 @@ bool parse_set_args(int argc, char* argv[])
             case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
             case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
             case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
+	    case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
             case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
         }
     }
@@ -275,7 +279,7 @@ int main(int argc, char* argv[])
     if (cmd_options.init_yes)
     {
         if (Settings::manifest_defaults.project_version.empty())
-            Settings::manifest_defaults.project_version = "v0.0.1";
+            Settings::manifest_defaults.project_version = "0.0.1";
         if (Settings::manifest_defaults.js_main_src.empty())
             Settings::manifest_defaults.js_main_src = "src/main.js";
         if (Settings::manifest_defaults.js_runtime.empty())

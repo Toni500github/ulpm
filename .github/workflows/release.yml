@@ -1,0 +1,205 @@
+name: Build ulpm
+
+on:
+  push:
+    tags: "v*"
+    #paths:
+      # trigger release workflow only if this file changed
+      #- .github/workflows/release.yml
+
+jobs:
+  get-version:
+    name: Get Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from git tag or commit
+        id: get-version
+        run: |
+          if [ -n "$(git tag --points-at HEAD)" ]; then
+            version=$(git describe --tags --abbrev=0)
+            echo "version=$version" >> $GITHUB_OUTPUT
+          else
+            version=$(git rev-parse --short HEAD)
+            echo "version=commit-$version" >> $GITHUB_OUTPUT
+          fi
+          echo "Version: $version"
+
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update && sudo apt-get purge firefox -y
+          sudo apt-get install -y build-essential pkg-config libncurses-dev make git zip
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install ncurses make git llvm zip
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            git
+            patch
+            zip
+            base-devel
+            mingw-w64-x86_64-ncurses
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-minizip
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+
+      - name: Build project (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          make all DEBUG=0
+
+      - name: Build project (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo 'export PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> /Users/runner/.bash_profile
+          make all DEBUG=0 CXX=clang++ CC=clang VARS="-D_XOPEN_SOURCE=600 -I/opt/homebrew/opt/llvm/include -L/opt/homebrew/opt/ncurses/lib -I/opt/homebrew/opt/ncurses/include"
+
+      - name: Build project (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          make all DEBUG=0
+
+      - name: Prepare Linux package
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p package/ulpm
+          cp ./build/release/ulpm package/ulpm/ulpm
+          chmod +x package/ulpm/ulpm
+          # Create a simple README or install script if needed
+          echo "#!/bin/bash" > package/ulpm/install.sh
+          echo "cp ulpm /usr/local/bin/ulpm" >> package/ulpm/install.sh
+          chmod +x package/ulpm/install.sh
+          cd package
+          zip -r ulpm-linux.zip ulpm/
+
+      - name: Prepare macOS package
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir -p package/ulpm
+          cp ./build/release/ulpm package/ulpm/ulpm
+          chmod +x package/ulpm/ulpm
+          # Create a simple README or install script if needed
+          echo "#!/bin/bash" > package/ulpm/install.sh
+          echo "cp ulpm /usr/local/bin/ulpm" >> package/ulpm/install.sh
+          chmod +x package/ulpm/install.sh
+          cd package
+          zip -r ulpm-macos.zip ulpm/
+
+      - name: Prepare Windows package
+        if: matrix.os == 'windows-latest'
+        shell: msys2 {0}
+        run: |
+          mkdir -p package/ulpm
+          cp ./build/release/ulpm.exe package/ulpm/ulpm.exe
+          # Copy required DLLs
+          ldd ./build/release/ulpm.exe | grep -i mingw | awk '{print $3}' | xargs -I {} cp {} package/ulpm/ || true
+          cd package
+          zip -r ulpm-windows.zip ulpm/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-packages
+          path: package/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: [build, get-version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release-url: ${{ steps.create-release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create-release
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          tag: ${{ needs.get-version.outputs.version }}
+          name: ulpm ${{ needs.get-version.outputs.version }}
+          draft: false
+          allowUpdates: true
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-binaries:
+    name: Upload packages to GitHub release
+    runs-on: ubuntu-latest
+    needs: [release, get-version, build]
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+
+      - name: List downloaded files
+        run: |
+          find downloaded-artifacts -type f | sort
+          echo "Artifact structure:"
+          ls -la downloaded-artifacts/
+
+      - name: Upload Linux package
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.release-url }}
+          asset_path: downloaded-artifacts/ubuntu-latest-packages/ulpm-linux.zip
+          asset_name: ulpm-linux-${{ needs.get-version.outputs.version }}.zip
+          asset_content_type: application/zip
+
+      - name: Upload macOS package
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.release-url }}
+          asset_path: downloaded-artifacts/macos-latest-packages/ulpm-macos.zip
+          asset_name: ulpm-macos-${{ needs.get-version.outputs.version }}.zip
+          asset_content_type: application/zip
+
+      - name: Upload Windows package
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.release.outputs.release-url }}
+          asset_path: downloaded-artifacts/windows-latest-packages/ulpm-windows.zip
+          asset_name: ulpm-windows-${{ needs.get-version.outputs.version }}.zip
+          asset_content_type: application/zip

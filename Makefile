@@ -1,8 +1,6 @@
 CXX       	?= g++
 TAR		?= bsdtar
 PREFIX	  	?= /usr
-MANPREFIX	?= $(PREFIX)/share/man
-LOCALEDIR	?= $(PREFIX)/share/locale
 VARS  	  	?= -DENABLE_NLS=1
 CXXSTD		?= c++20
 
@@ -44,8 +42,8 @@ VERSION    	 = 0.0.1
 SRC	 	 = $(wildcard src/*.cpp)
 OBJ	 	 = $(SRC:.cpp=.o)
 LDFLAGS   	+= -L$(BUILDDIR)
-LDLIBS		+= $(wildcard $(BUILDDIR)/*.a) -lncursesw
-CXXFLAGS        += $(LTO_FLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -Iinclude -Iinclude/libs -std=$(CXXSTD) $(VARS) -DVERSION=\"$(VERSION)\"
+LDLIBS		+= $(BUILDDIR)/libfmt.a $(BUILDDIR)/libtiny-process-library.a $(shell pkg-config --libs ncursesw)
+CXXFLAGS        += $(LTO_FLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -Iinclude -Iinclude/libs $(shell pkg-config --cflags ncursesw) -std=$(CXXSTD) $(VARS) -DVERSION=\"$(VERSION)\"
 
 all: genver fmt toml tpl getopt-port $(TARGET)
 
@@ -80,8 +78,8 @@ $(TARGET): genver fmt toml tpl getopt-port $(OBJ)
 	sh ./scripts/generateVersion.sh
 	$(CXX) -o $(BUILDDIR)/$(TARGET) $(OBJ) $(BUILDDIR)/*.o $(LDFLAGS) $(LDLIBS)
 
-locale:
-	scripts/make_mo.sh locale/
+dist: $(TARGET)
+	zip -j $(NAME)-v$(VERSION).zip LICENSE README.md $(BUILDDIR)/$(TARGET)
 
 clean:
 	rm -rf $(BUILDDIR)/$(TARGET) $(OBJ)

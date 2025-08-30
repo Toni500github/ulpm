@@ -427,14 +427,14 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
         }
     }
 
-    if (!manifest_defaults.language.empty() && m_settings.language != manifest_defaults.language)
+    if (!manifest_defaults.language.empty())
     {
         m_settings.language = manifest_defaults.language;
         update_json_field(m_doc, "language", manifest_defaults.language);
         manifest_updated = true;
     }
 
-    if (!manifest_defaults.package_manager.empty() && m_settings.package_manager != manifest_defaults.package_manager)
+    if (!manifest_defaults.package_manager.empty())
     {
         update_json_field(m_doc, "package_manager", manifest_defaults.package_manager);
         if (!m_doc["commands"].HasMember(manifest_defaults.package_manager))
@@ -462,7 +462,7 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
         manifest_updated = true;
     }
 
-    if (!manifest_defaults.license.empty() && m_settings.license != manifest_defaults.license)
+    if (!manifest_defaults.license.empty())
     {
         update_json_field(m_doc, "license", manifest_defaults.license);
         if (m_settings.language == "javascript")
@@ -483,7 +483,7 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
         manifest_updated = true;
     }
 
-    if (!manifest_defaults.project_name.empty() && m_settings.project_name != manifest_defaults.project_name)
+    if (!manifest_defaults.project_name.empty())
     {
         update_json_field(m_doc, "project_name", manifest_defaults.project_name);
         if (m_settings.language == "javascript")
@@ -495,8 +495,19 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
         pkg_updated      = true;
     }
 
-    if (!manifest_defaults.project_description.empty() &&
-        m_settings.project_description != manifest_defaults.project_description)
+    if (!manifest_defaults.project_version.empty())
+    {
+        update_json_field(m_doc, "project_version", manifest_defaults.project_version);
+        if (m_settings.language == "javascript")
+            update_json_field(js_pkg_doc, "version", manifest_defaults.project_version);
+        else if (m_settings.language == "rust")
+            cargo_toml_tbl["package"].as_table()->insert_or_assign("version", manifest_defaults.project_version);
+
+        manifest_updated = true;
+        pkg_updated      = true;
+    }
+
+    if (!manifest_defaults.project_description.empty())
     {
         update_json_field(m_doc, "project_description", manifest_defaults.project_description);
         if (m_settings.language == "javascript")
@@ -509,7 +520,7 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
         pkg_updated      = true;
     }
 
-    if (!manifest_defaults.author.empty() && m_settings.author != manifest_defaults.author)
+    if (!manifest_defaults.author.empty())
     {
         update_json_field(m_doc, "author", manifest_defaults.author);
         if (m_settings.language == "javascript")

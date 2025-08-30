@@ -28,7 +28,9 @@
 #include "util.hpp"
 
 #include <ncurses.h>
+#include <unistd.h>
 
+#include <cstdio>
 #include <algorithm>
 #include <cctype>
 #include <iterator>
