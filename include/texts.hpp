@@ -36,6 +36,8 @@ Manage projects across multiple languages with a single universal CLI.
 Commands:
     init                Initialize a new project with interactive prompts.
     set                 Modify settings in ulpm.json and the package manager manifest.
+    install             Install/Add new dependencies.
+    build               Build your project.
     run <script>        Run a script using the chosen package manager.
 
 Global options:

@@ -1,3 +1,28 @@
+/*
+ * Copyright 2025 Toni500git
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+ * following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+ * disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+ * following disclaimer in the documentation and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote
+ * products derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS “AS IS” AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
 #define RAPIDJSON_HAS_STDSTRING 1
 #define TOML_HEADER_ONLY 0
 #include "settings.hpp"
@@ -72,8 +97,7 @@ constexpr const char* config_json = R"({
 static void download_license(const std::string& license)
 {
     const std::string& url = "https://raw.githubusercontent.com/spdx/license-list-data/master/text/" + license + ".txt";
-    Process proc({ "curl", "-fL", url, "-o", "LICENSE.txt" });
-    if (proc.get_exit_status() != 0)
+    if (Process({ "curl", "-fL", url, "-o", "LICENSE.txt" }).get_exit_status() != 0)
         die("Failed to download to file LICENSE.txt");
 }
 
@@ -247,7 +271,9 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
     else if (m_settings.language == "rust")
     {
         m_settings.package_manager = "cargo";
-        m_settings.rust_edition = draw_entry_menu("Choose a rust edition", vec_from_array(config_doc["languages"][m_settings.language]["rust_editions"]), m_settings.rust_edition);
+        m_settings.rust_edition    = draw_entry_menu(
+            "Choose a rust edition", vec_from_array(config_doc["languages"][m_settings.language]["rust_editions"]),
+            m_settings.rust_edition);
     }
     else
     {
@@ -355,10 +381,10 @@ void Manifest::create_manifest(std::FILE* file)
     write_to_json(file, m_doc);
 }
 
-void Manifest::run_cmd(const std::vector<std::string>& arguments)
+void Manifest::run_cmd(const std::string& cmd, const std::vector<std::string>& arguments)
 {
-    const std::string& exec = fmt::format("{} {}", m_doc["commands"][m_settings.package_manager]["run"].GetString(),
-                                          fmt::join(arguments, " "));
+    const std::string& exec =
+        fmt::format("{} {}", m_doc["commands"][m_settings.package_manager][cmd].GetString(), fmt::join(arguments, " "));
     debug("Running {}", exec);
     if (Process(exec).get_exit_status() != 0)
         die("Failed to execute '{}'", exec);
