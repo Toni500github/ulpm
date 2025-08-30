@@ -1,6 +1,6 @@
 # ulpm - Universal Language Package Manager
 
-A single, unified command-line tool to initialize, configure, and run projects across different programming languages. Stop memorizing the specific commands for `npm`, `yarn`, and `cargo`—use `ulpm` instead.
+A single, unified command-line tool to initialize, configure, and run projects across different programming languages. Stop memorizing the specific commands for `npm`, `yarn`, `cargo`, etc. use `ulpm` instead.
 
 ## What is this?
 
