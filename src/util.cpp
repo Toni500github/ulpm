@@ -1,3 +1,5 @@
+#define RAPIDJSON_HAS_STDSTRING 1
+
 #include "util.hpp"
 
 #include <ncurses.h>
@@ -8,6 +10,12 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "fmt/os.h"
+#include "rapidjson/error/en.h"
+#include "rapidjson/filereadstream.h"
+#include "rapidjson/filewritestream.h"
+#include "rapidjson/prettywriter.h"
 
 // src/box.cpp
 void draw_search_box(const std::string& query, const std::string& text, const std::vector<std::string>& results,
@@ -308,3 +316,89 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
     endwin();
     return "";
 }
+
+namespace JsonUtils
+{
+
+std::vector<std::string> vec_from_members(const rapidjson::Value& obj)
+{
+    std::vector<std::string> keys;
+    if (!obj.IsObject())
+        return keys;
+    keys.reserve(obj.MemberCount());
+    for (auto const& item : obj.GetObject())
+        keys.emplace_back(item.name.GetString());
+    return keys;
+}
+
+std::vector<std::string> vec_from_array(const rapidjson::Value& array)
+{
+    std::vector<std::string> keys;
+    if (!array.IsArray())
+        return keys;
+    keys.reserve(array.Size());
+    for (auto const& e : array.GetArray())
+        if (e.IsString())
+            keys.emplace_back(e.GetString());
+    return keys;
+}
+
+void write_to_json(std::FILE* file, const rapidjson::Document& doc)
+{
+    // seek back to the beginning to overwrite
+    fseek(file, 0, SEEK_SET);
+
+    char                                                writeBuffer[UINT16_MAX] = { 0 };
+    rapidjson::FileWriteStream                          writeStream(file, writeBuffer, sizeof(writeBuffer));
+    rapidjson::PrettyWriter<rapidjson::FileWriteStream> fileWriter(writeStream);
+    fileWriter.SetFormatOptions(rapidjson::kFormatSingleLineArray);  // Disable newlines between array elements
+    doc.Accept(fileWriter);
+
+    ftruncate(fileno(file), ftell(file));
+    fflush(file);
+}
+
+void autogen_empty_json(const std::string_view name)
+{
+    auto f = fmt::output_file(name.data(), fmt::file::CREATE | fmt::file::WRONLY | fmt::file::TRUNC);
+    f.print("{{}}");
+    f.close();
+}
+
+void populate_doc(std::FILE* file, rapidjson::Document& doc)
+{
+    if (!file)
+    {
+        perror("fopen");
+        return;
+    }
+
+    char                      buf[UINT16_MAX] = { 0 };
+    rapidjson::FileReadStream stream(file, buf, sizeof(buf));
+
+    if (doc.ParseStream(stream).HasParseError())
+    {
+        fclose(file);
+        die("Failed to parse json file: {} At offset {}", rapidjson::GetParseError_En(doc.GetParseError()),
+            doc.GetErrorOffset());
+    };
+}
+
+void update_json_field(rapidjson::Document& pkg_doc, const std::string& field, const std::string& value)
+{
+    rapidjson::Document::AllocatorType& allocator = pkg_doc.GetAllocator();
+
+    if (pkg_doc.HasMember(field))
+    {
+        debug("changing {} from '{}' to '{}'", field, pkg_doc[field].GetString(), value);
+        pkg_doc[field].SetString(value.c_str(), value.length(), allocator);
+    }
+    else
+    {
+        debug("adding field '{}' with value '{}'", field, value);
+        pkg_doc.AddMember(rapidjson::Value(field.c_str(), field.length(), allocator),
+                          rapidjson::Value(value.c_str(), value.length(), allocator), allocator);
+    }
+}
+
+}  // namespace JsonUtils

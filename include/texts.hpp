@@ -35,13 +35,12 @@ Manage projects across multiple languages with a single universal CLI.
 
 Commands:
     init                Initialize a new project with interactive prompts.
-    set                 Modify settings in the manifest (equivalent to `init -f`).
-    run <script>        Run a script using the chosen package manager (currently JavaScript only).
+    set                 Modify settings in ulpm.json and the package manager manifest.
+    run <script>        Run a script using the chosen package manager.
 
 Global options:
     -h, --help          Show this help message
     -V, --version       Show version and build information
-    -v, --verbose       Show output of executed commands
 )");
 
 inline constexpr std::string_view ulpm_help_init = (R"(Usage: ulpm init [options]
@@ -101,7 +100,7 @@ Examples:
 inline constexpr std::string_view ulpm_help_run = (R"(
 Usage: ulpm run [options] <script> [args...]
 
-Run a script using the chosen package manager (currently JavaScript only).
+Run a script using the chosen package manager.
 
 Options:
     -h, --help           Show this help message

@@ -10,7 +10,6 @@
 #include "settings.hpp"
 #include "switch_fnv1a.hpp"
 #include "texts.hpp"
-#include "util.hpp"
 
 #if (!__has_include("version.h"))
 #error "version.h not found, please generate it with ./scripts/generateVersion.sh"
@@ -23,15 +22,15 @@
 enum OPs
 {
     NONE,
+    INSTALL,
     INIT,
     RUN,
+    BUILD,
     SET,
 } op = NONE;
 
 static const std::unordered_map<std::string_view, OPs> map{
-    { "init", INIT },
-    { "run", RUN },
-    { "set", SET },
+    { "install", INSTALL }, { "build", BUILD }, { "init", INIT }, { "run", RUN }, { "set", SET }
 };
 
 struct cmd_options_t cmd_options;
@@ -84,9 +83,6 @@ bool parse_run_args(int argc, char* argv[])
 
     for (int i = optind; i < argc; ++i)
         cmd_options.arguments.emplace_back(argv[i]);
-
-    if (cmd_options.arguments.empty())
-        die("run: no arguments given");
 
     return true;
 }
@@ -203,12 +199,10 @@ static bool parseargs(int argc, char* argv[])
     // clang-format off
     int opt = 0;
     int option_index = 0;
-    const char *optstring = "+Vvh";
+    const char *optstring = "+Vh";
     static const struct option opts[] = {
         {"version", no_argument, 0, 'V'},
         {"help",    no_argument, 0, 'h'},
-
-        {"verbose", no_argument, 0, 'v'},
         {0,0,0,0}
     };
 
@@ -223,7 +217,6 @@ static bool parseargs(int argc, char* argv[])
 
             case 'V': version(); break;
             case 'h': help(ulpm_help, EXIT_SUCCESS); break;
-            case 'v': cmd_options_verbose = true; break;
             default:  return false;
         }
     }
@@ -253,13 +246,15 @@ int main(int argc, char* argv[])
         return -1;
 
     setlocale(LC_ALL, "");
-    if (Settings::manifest_defaults.project_version.empty())
-        Settings::manifest_defaults.project_version = "v0.0.1";
-    if (Settings::manifest_defaults.js_main_src.empty())
-        Settings::manifest_defaults.js_main_src = "src/main.js";
-    if (Settings::manifest_defaults.js_runtime.empty())
-        Settings::manifest_defaults.js_runtime = "node";
-
+    if (cmd_options.init_yes)
+    {
+        if (Settings::manifest_defaults.project_version.empty())
+            Settings::manifest_defaults.project_version = "v0.0.1";
+        if (Settings::manifest_defaults.js_main_src.empty())
+            Settings::manifest_defaults.js_main_src = "src/main.js";
+        if (Settings::manifest_defaults.js_runtime.empty())
+            Settings::manifest_defaults.js_runtime = "node";
+    }
     Settings::Manifest man;
     if (op == INIT)
     {

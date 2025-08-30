@@ -11,8 +11,6 @@ struct cmd_options_t
     std::vector<std::string> arguments;
 };
 
-inline bool cmd_options_verbose = false;
-
 #define MANIFEST_NAME "ulpm.json"
 
 namespace Settings
@@ -27,6 +25,7 @@ inline struct ManiSettings
     std::string project_version;
     std::string js_main_src;
     std::string js_runtime;
+    std::string rust_edition;
     std::string author;
 } manifest_defaults;
 
@@ -44,6 +43,5 @@ private:
     rapidjson::Document m_doc;
     ManiSettings        m_settings;
     void                create_manifest(std::FILE* file);
-    void update_json_field(rapidjson::Document& pkg_doc, const std::string& field, const std::string& value);
 };
 }  // namespace Settings

@@ -47,12 +47,17 @@ LDFLAGS   	+= -L$(BUILDDIR)
 LDLIBS		+= $(wildcard $(BUILDDIR)/*.a) -lncursesw
 CXXFLAGS        += $(LTO_FLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -Iinclude -Iinclude/libs -std=$(CXXSTD) $(VARS) -DVERSION=\"$(VERSION)\"
 
-all: genver fmt tpl getopt-port $(TARGET)
+all: genver fmt toml tpl getopt-port $(TARGET)
 
 fmt:
 ifeq ($(wildcard $(BUILDDIR)/libfmt.a),)
 	mkdir -p $(BUILDDIR)
 	$(MAKE) -C src/libs/fmt BUILDDIR=$(BUILDDIR) CXXSTD=$(CXXSTD)
+endif
+
+toml:
+ifeq ($(wildcard $(BUILDDIR)/toml.o),)
+	$(MAKE) -C src/libs/toml++ BUILDDIR=$(BUILDDIR) CXXSTD=$(CXXSTD)
 endif
 
 tpl:
@@ -70,7 +75,7 @@ ifeq ($(wildcard include/version.h),)
 	./scripts/generateVersion.sh
 endif
 
-$(TARGET): genver fmt tpl getopt-port $(OBJ)
+$(TARGET): genver fmt toml tpl getopt-port $(OBJ)
 	mkdir -p $(BUILDDIR)
 	sh ./scripts/generateVersion.sh
 	$(CXX) -o $(BUILDDIR)/$(TARGET) $(OBJ) $(BUILDDIR)/*.o $(LDFLAGS) $(LDLIBS)
@@ -91,4 +96,4 @@ updatever:
 	sed -i "s#$(OLDVERSION)#$(VERSION)#g" $(wildcard .github/workflows/*.yml) compile_flags.txt
 	sed -i "s#Project-Id-Version: $(NAME) $(OLDVERSION)#Project-Id-Version: $(NAME) $(VERSION)#g" po/*
 
-.PHONY: $(TARGET) updatever distclean fmt tpl genver clean all locale
+.PHONY: $(TARGET) updatever distclean fmt toml tpl genver clean all locale

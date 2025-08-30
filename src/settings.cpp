@@ -1,4 +1,5 @@
 #define RAPIDJSON_HAS_STDSTRING 1
+#define TOML_HEADER_ONLY 0
 #include "settings.hpp"
 
 #include <unistd.h>
@@ -6,6 +7,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
+#include <sstream>
 #include <string_view>
 #include <vector>
 
@@ -14,18 +16,15 @@
 #include "fmt/ranges.h"
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
-#include "rapidjson/filereadstream.h"
-#include "rapidjson/filewritestream.h"
-#include "rapidjson/prettywriter.h"
 #include "rapidjson/rapidjson.h"
 #include "tiny-process-library/process.hpp"
+#include "toml++/toml.hpp"
 #include "util.hpp"
 
 using namespace Settings;
 using namespace TinyProcessLib;
+using namespace JsonUtils;
 namespace fs = std::filesystem;
-
-#define VERBOSE_STDOUT !cmd_options_verbose ? nullptr : [](const char*, size_t) {}
 
 rapidjson::Document   config_doc;
 constexpr const char* config_json = R"({
@@ -35,7 +34,8 @@ constexpr const char* config_json = R"({
             "js_runtimes": ["node", "bun", "deno", "qjs", "d8", "jsc", "js"]
         },
         "rust": {
-            "package_managers": ["cargo"]
+            "package_managers": ["cargo"],
+            "rust_editions": ["2024", "2021", "2018", "2015"]
         },
         "c++": {
             "package_managers": []
@@ -43,13 +43,19 @@ constexpr const char* config_json = R"({
     },
     "commands": {
         "npm": {
-            "run": "npm run"
+            "run": "npm run",
+            "install": "npm install",
+            "build": "echo \"Not supported. Modify command to be used in ulpm.json\" && exit 1"
         },
         "yarn": {
-            "run": "yarn run"
+            "run": "yarn run",
+            "install": "yarn install",
+            "build": "echo \"Not supported. Modify command to be used in ulpm.json\" && exit 1"
         },
         "cargo": {
-            "run": "cargo run"
+            "run": "cargo run",
+            "install": "cargo add",
+            "build": "cargo build"
         }
     },
     "licenses": [
@@ -63,57 +69,40 @@ constexpr const char* config_json = R"({
     ]
 })";
 
-static void write_to_json(std::FILE* file, const rapidjson::Document& doc)
+static void download_license(const std::string& license)
 {
-    // seek back to the beginning to overwrite
-    fseek(file, 0, SEEK_SET);
-
-    char                                                writeBuffer[UINT16_MAX] = { 0 };
-    rapidjson::FileWriteStream                          writeStream(file, writeBuffer, sizeof(writeBuffer));
-    rapidjson::PrettyWriter<rapidjson::FileWriteStream> fileWriter(writeStream);
-    fileWriter.SetFormatOptions(rapidjson::kFormatSingleLineArray);  // Disable newlines between array elements
-    doc.Accept(fileWriter);
-
-    ftruncate(fileno(file), ftell(file));
-    fflush(file);
+    const std::string& url = "https://raw.githubusercontent.com/spdx/license-list-data/master/text/" + license + ".txt";
+    Process proc({ "curl", "-fL", url, "-o", "LICENSE.txt" });
+    if (proc.get_exit_status() != 0)
+        die("Failed to download to file LICENSE.txt");
 }
 
-static void autogen_empty_json(const std::string_view name)
+// Ensures a sub-table exists for a given key. Returns a reference to the sub-table.
+static toml::table& ensure_table(toml::table& parent, const std::string_view key)
 {
-    auto f = fmt::output_file(name.data(), fmt::file::CREATE | fmt::file::WRONLY | fmt::file::TRUNC);
-    f.print("{{}}");
+    if (toml::node* node = parent[key].node())
+        if (auto* tbl = node->as_table())
+            return *tbl;
+
+    auto [it, inserted] = parent.insert(key, toml::table{});
+    return *it->second.as_table();
+}
+
+static void output_to_file(const std::string_view path, const std::string& content)
+{
+    auto f = fmt::output_file(path.data(), fmt::file::CREATE | fmt::file::WRONLY);
+    f.print("{}", content);
     f.close();
 }
 
-static void populate_doc(std::FILE* file, rapidjson::Document& doc)
+static void generate_cargo_toml(toml::table& tbl, const ManiSettings& settings)
 {
-    if (!file)
-    {
-        perror("fopen");
-        return;
-    }
-
-    char                      buf[UINT16_MAX] = { 0 };
-    rapidjson::FileReadStream stream(file, buf, sizeof(buf));
-
-    if (doc.ParseStream(stream).HasParseError())
-    {
-        fclose(file);
-        die("Failed to parse json file: {} At offset {}", rapidjson::GetParseError_En(doc.GetParseError()),
-            doc.GetErrorOffset());
-    };
-}
-
-static bool download_license(const std::string& license)
-{
-    const std::string& url = "https://raw.githubusercontent.com/spdx/license-list-data/master/text/" + license + ".txt";
-    if (Process("curl -L " + url + " -o LICENSE.txt", "", VERBOSE_STDOUT).get_exit_status() != 0)
-    {
-        error("Failed to download to file LICENSE.txt");
-        return false;
-    }
-
-    return true;
+    toml::table& package = ensure_table(tbl, "package");
+    package.insert_or_assign("name", settings.project_name);
+    package.insert_or_assign("version", settings.project_version);
+    package.insert_or_assign("description", settings.project_description);
+    package.insert_or_assign("license", settings.license);
+    ensure_table(tbl, "dependencies");
 }
 
 static void generate_js_package_json(const ManiSettings& settings)
@@ -137,29 +126,6 @@ static void generate_js_package_json(const ManiSettings& settings)
     write_to_json(file, doc);
 
     fclose(file);
-}
-
-static std::vector<std::string> vec_from_members(const rapidjson::Value& obj)
-{
-    std::vector<std::string> keys;
-    if (!obj.IsObject())
-        return keys;
-    keys.reserve(obj.MemberCount());
-    for (auto const& item : obj.GetObject())
-        keys.emplace_back(item.name.GetString());
-    return keys;
-}
-
-static std::vector<std::string> vec_from_array(const rapidjson::Value& array)
-{
-    std::vector<std::string> keys;
-    if (!array.IsArray())
-        return keys;
-    keys.reserve(array.Size());
-    for (auto& e : array.GetArray())
-        if (e.IsString())
-            keys.emplace_back(e.GetString());
-    return keys;
 }
 
 void Manifest::validate_manifest()
@@ -273,19 +239,24 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
         m_settings.js_runtime = draw_entry_menu(
             "Choose a Javascript runtime", vec_from_array(config_doc["languages"][m_settings.language]["js_runtimes"]),
             m_settings.js_runtime);
+        m_settings.package_manager =
+            draw_entry_menu("Choose a preferred package manager to use",
+                            vec_from_array(config_doc["languages"][m_settings.language]["package_managers"]),
+                            m_settings.package_manager);
+    }
+    else if (m_settings.language == "rust")
+    {
+        m_settings.package_manager = "cargo";
+        m_settings.rust_edition = draw_entry_menu("Choose a rust edition", vec_from_array(config_doc["languages"][m_settings.language]["rust_editions"]), m_settings.rust_edition);
     }
     else
     {
         die("language '{}' is WIP", m_settings.language);
     }
 
-    m_settings.package_manager = draw_entry_menu(
-        "Choose a preferred package manager to use",
-        vec_from_array(config_doc["languages"][m_settings.language]["package_managers"]), m_settings.package_manager);
-
     m_settings.project_name        = draw_input_menu("Name of the project", m_settings.project_name);
-    m_settings.project_description = draw_input_menu("Description of the project", m_settings.project_description.empty() ? "v0.0.1" : m_settings.project_version);
-    m_settings.project_version     = draw_input_menu("Initial Version of the project", m_settings.project_version);
+    m_settings.project_description = draw_input_menu("Description of the project", m_settings.project_description);
+    m_settings.project_version     = draw_input_menu("Initial Version of the project", m_settings.project_version.empty() ? "v0.0.1" : m_settings.project_version);
     m_settings.author              = draw_input_menu("Author of the project", m_settings.author.empty() ? "Name <email@example.com>" : m_settings.author);
     if (m_settings.language == "javascript")
         m_settings.js_main_src = draw_input_menu("Path to main javascript entry", m_settings.js_main_src.empty() ? "src/main.js" : m_settings.js_main_src);
@@ -297,7 +268,7 @@ skip_menu:
     create_manifest(m_file);
     fclose(m_file);
 
-    if (m_settings.license != "None")
+    if (m_settings.license != "Custom")
     {
         if (fs::exists("LICENSE.txt") && !cmd_options.init_force)
             warn("LICENSE.txt already exists, skipping download");
@@ -322,6 +293,25 @@ skip_menu:
         f.print("console.log('Hello World!');");
         f.close();
     }
+    else if (m_settings.language == "rust")
+    {
+        info("Initializing cargo project ...");
+        if (Process("cargo init").get_exit_status() != 0)
+        {
+            warn_stat("Failed to run 'cargo init'. We going to do it ourself");
+            info("Creating main entry at 'src/main.rs' ...");
+            fs::create_directory("src");
+            output_to_file("src/main.rs", "fn main() {\n\tprintln!(\"Hello, World!\");\n}");
+
+            info("Auto generating Cargo.toml ...");
+            output_to_file("Cargo.toml", "[package]\n\n[dependencies]");
+        }
+        toml::table tbl = toml::parse_file("Cargo.toml");
+        generate_cargo_toml(tbl, m_settings);
+        std::stringstream ss;
+        ss << tbl;
+        output_to_file("Cargo.toml", ss.str());
+    }
     info("Done!");
 }
 
@@ -344,6 +334,16 @@ void Manifest::create_manifest(std::FILE* file)
         rapidjson::Value(config_doc["commands"][m_settings.package_manager]["run"].GetString(),
                          config_doc["commands"][m_settings.package_manager]["run"].GetStringLength()),
         allocator);
+    m_doc["commands"][m_settings.package_manager].AddMember(
+        "install",
+        rapidjson::Value(config_doc["commands"][m_settings.package_manager]["install"].GetString(),
+                         config_doc["commands"][m_settings.package_manager]["install"].GetStringLength()),
+        allocator);
+    m_doc["commands"][m_settings.package_manager].AddMember(
+        "build",
+        rapidjson::Value(config_doc["commands"][m_settings.package_manager]["build"].GetString(),
+                         config_doc["commands"][m_settings.package_manager]["build"].GetStringLength()),
+        allocator);
 
     m_doc.AddMember(rapidjson::Value(m_settings.language.c_str(), m_settings.language.size()),
                     rapidjson::Value(rapidjson::kObjectType), allocator);
@@ -360,23 +360,50 @@ void Manifest::run_cmd(const std::vector<std::string>& arguments)
     const std::string& exec = fmt::format("{} {}", m_doc["commands"][m_settings.package_manager]["run"].GetString(),
                                           fmt::join(arguments, " "));
     debug("Running {}", exec);
-    if (Process(exec, "", VERBOSE_STDOUT).get_exit_status() != 0)
+    if (Process(exec).get_exit_status() != 0)
         die("Failed to execute '{}'", exec);
 }
 
 void Manifest::set_project_settings(const cmd_options_t& cmd_options)
 {
     rapidjson::Document js_pkg_doc;
-    bool                manifest_updated     = false;
-    bool                package_json_updated = false;
+    toml::table         cargo_toml_tbl;
+    std::FILE*          pkg_manifest;
+    bool                manifest_updated = false;
+    bool                pkg_updated      = false;
 
-    if (m_settings.language == "javascript" && !fs::exists("package.json"))
-        autogen_empty_json("package.json");
-    std::FILE* js_pkg_file = fopen("package.json", "r+");
-    populate_doc(js_pkg_file, js_pkg_doc);
+    if (m_settings.language == "javascript")
+    {
+        if (!fs::exists("package.json"))
+            autogen_empty_json("package.json");
+        pkg_manifest = fopen("package.json", "r+");
+        populate_doc(pkg_manifest, js_pkg_doc);
+    }
+    else if (m_settings.language == "rust")
+    {
+        if (!fs::exists("Cargo.toml"))
+        {
+            auto f = fmt::output_file("Cargo.toml", fmt::file::CREATE | fmt::file::RDWR);
+            f.print("[package]\n\n[dependencies]");
+            f.close();
+        }
+        pkg_manifest = fopen("Cargo.toml", "r+");
+        try
+        {
+            cargo_toml_tbl = toml::parse_file("Cargo.toml");
+        }
+        catch (const toml::parse_error& err)
+        {
+            die("Parsing config file 'Cargo.toml' failed:\n"
+                "{}\n"
+                "\t(error occurred at line {} column {})",
+                err.description(), err.source().begin.line, err.source().begin.column);
+        }
+    }
 
     if (!manifest_defaults.language.empty() && m_settings.language != manifest_defaults.language)
     {
+        m_settings.language = manifest_defaults.language;
         update_json_field(m_doc, "language", manifest_defaults.language);
         manifest_updated = true;
     }
@@ -386,13 +413,25 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
         update_json_field(m_doc, "package_manager", manifest_defaults.package_manager);
         if (!m_doc["commands"].HasMember(manifest_defaults.package_manager))
         {
-            m_doc["commands"].AddMember(rapidjson::Value(manifest_defaults.package_manager.c_str(), manifest_defaults.package_manager.size()),
-                                rapidjson::Value(rapidjson::kObjectType), m_doc.GetAllocator());
-            m_doc["commands"][manifest_defaults.package_manager].AddMember(
+            rapidjson::Document::AllocatorType& allocator = m_doc.GetAllocator();
+            m_doc["commands"].AddMember(
+                rapidjson::Value(m_settings.package_manager.c_str(), m_settings.package_manager.size()),
+                rapidjson::Value(rapidjson::kObjectType), allocator);
+            m_doc["commands"][m_settings.package_manager].AddMember(
                 "run",
-                rapidjson::Value(config_doc["commands"][manifest_defaults.package_manager]["run"].GetString(),
-                                 config_doc["commands"][manifest_defaults.package_manager]["run"].GetStringLength()),
-                m_doc.GetAllocator());
+                rapidjson::Value(config_doc["commands"][m_settings.package_manager]["run"].GetString(),
+                                 config_doc["commands"][m_settings.package_manager]["run"].GetStringLength()),
+                allocator);
+            m_doc["commands"][m_settings.package_manager].AddMember(
+                "install",
+                rapidjson::Value(config_doc["commands"][m_settings.package_manager]["install"].GetString(),
+                                 config_doc["commands"][m_settings.package_manager]["install"].GetStringLength()),
+                allocator);
+            m_doc["commands"][m_settings.package_manager].AddMember(
+                "build",
+                rapidjson::Value(config_doc["commands"][m_settings.package_manager]["build"].GetString(),
+                                 config_doc["commands"][m_settings.package_manager]["build"].GetStringLength()),
+                allocator);
         }
         manifest_updated = true;
     }
@@ -400,7 +439,11 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
     if (!manifest_defaults.license.empty() && m_settings.license != manifest_defaults.license)
     {
         update_json_field(m_doc, "license", manifest_defaults.license);
-        manifest_updated = true;
+        if (m_settings.language == "javascript")
+            update_json_field(js_pkg_doc, "license", manifest_defaults.license);
+        else if (m_settings.language == "rust")
+            cargo_toml_tbl["package"].as_table()->insert_or_assign("license", manifest_defaults.license);
+
         if ((fs::exists("LICENSE.txt") && !cmd_options.init_force) || manifest_defaults.license == "Custom")
             warn("LICENSE.txt already exists, use --force to overwrite");
         else
@@ -410,31 +453,45 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
             info("Downloading license {} to LICENSE.txt ...", manifest_defaults.license);
             download_license(manifest_defaults.license);
         }
+        pkg_updated      = true;
+        manifest_updated = true;
     }
 
     if (!manifest_defaults.project_name.empty() && m_settings.project_name != manifest_defaults.project_name)
     {
         update_json_field(m_doc, "project_name", manifest_defaults.project_name);
-        update_json_field(js_pkg_doc, "name", manifest_defaults.project_name);
-        manifest_updated     = true;
-        package_json_updated = true;
+        if (m_settings.language == "javascript")
+            update_json_field(js_pkg_doc, "name", manifest_defaults.project_name);
+        else if (m_settings.language == "rust")
+            cargo_toml_tbl["package"].as_table()->insert_or_assign("name", manifest_defaults.project_name);
+
+        manifest_updated = true;
+        pkg_updated      = true;
     }
 
     if (!manifest_defaults.project_description.empty() &&
         m_settings.project_description != manifest_defaults.project_description)
     {
         update_json_field(m_doc, "project_description", manifest_defaults.project_description);
-        update_json_field(js_pkg_doc, "description", manifest_defaults.project_description);
-        manifest_updated     = true;
-        package_json_updated = true;
+        if (m_settings.language == "javascript")
+            update_json_field(js_pkg_doc, "description", manifest_defaults.project_description);
+        else if (m_settings.language == "rust")
+            cargo_toml_tbl["package"].as_table()->insert_or_assign("description",
+                                                                   manifest_defaults.project_description);
+
+        manifest_updated = true;
+        pkg_updated      = true;
     }
 
     if (!manifest_defaults.author.empty() && m_settings.author != manifest_defaults.author)
     {
         update_json_field(m_doc, "author", manifest_defaults.author);
-        update_json_field(js_pkg_doc, "author", manifest_defaults.author);
-        manifest_updated     = true;
-        package_json_updated = true;
+        if (m_settings.language == "javascript")
+        {
+            update_json_field(js_pkg_doc, "author", manifest_defaults.author);
+            pkg_updated = true;
+        }
+        manifest_updated = true;
     }
 
     if (manifest_updated)
@@ -443,27 +500,18 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
         info("Updated {}", MANIFEST_NAME);
     }
 
-    if (package_json_updated)
+    if (pkg_updated)
     {
-        freopen("package.json", "w+", js_pkg_file);
-        write_to_json(js_pkg_file, js_pkg_doc);
+        if (m_settings.language == "javascript")
+        {
+            write_to_json(pkg_manifest, js_pkg_doc);
+        }
+        else if (m_settings.language == "rust")
+        {
+            std::stringstream ss;
+            ss << cargo_toml_tbl;
+            output_to_file("Cargo.toml", ss.str());
+        }
         info("Updated package.json");
-    }
-}
-
-void Manifest::update_json_field(rapidjson::Document& pkg_doc, const std::string& field, const std::string& value)
-{
-    rapidjson::Document::AllocatorType& allocator = pkg_doc.GetAllocator();
-
-    if (pkg_doc.HasMember(field))
-    {
-        debug("changing {} from '{}' to '{}'", field, pkg_doc[field].GetString(), value);
-        pkg_doc[field].SetString(value.c_str(), value.length(), allocator);
-    }
-    else
-    {
-        debug("adding field '{}' with value '{}'", field, value);
-        pkg_doc.AddMember(rapidjson::Value(field.c_str(), field.length(), allocator),
-                          rapidjson::Value(value.c_str(), value.length(), allocator), allocator);
     }
 }
