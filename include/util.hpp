@@ -137,6 +137,8 @@ std::vector<std::string> vec_from_array(const rapidjson::Value& array);
 void                     write_to_json(std::FILE* file, const rapidjson::Document& doc);
 void                     populate_doc(std::FILE* file, rapidjson::Document& doc);
 void                     autogen_empty_json(const std::string_view name);
+std::string find_value_from_obj_array(const rapidjson::Value& array, const std::string& name, const std::string& value);
+std::vector<std::string> vec_from_obj_array(const rapidjson::Value& array, const std::string& name);
 void update_json_field(rapidjson::Document& pkg_doc, const std::string& field, const std::string& value);
 
 }  // namespace JsonUtils

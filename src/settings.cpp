@@ -56,7 +56,15 @@ constexpr const char* config_json = R"({
     "languages": {
         "javascript": {
             "package_managers": ["npm", "yarn", "pnpm"],
-            "js_runtimes": ["node", "bun", "deno", "qjs", "d8", "jsc", "js"]
+            "js_runtimes": [
+                { "name": "Node.js", "binary": "node" },
+                { "name": "Bun", "binary": "bun" },
+                { "name": "Deno", "binary": "deno" },
+                { "name": "QuickJS", "binary": "qjs" },
+                { "name": "V8", "binary": "d8" },
+                { "name": "JavaScriptCore", "binary": "jsc" },
+                { "name": "SpiderMonkey", "binary": "js" }
+            ]
         },
         "rust": {
             "package_managers": ["cargo"],
@@ -260,9 +268,13 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
                                           vec_from_members(config_doc["languages"]), m_settings.language);
     if (m_settings.language == "javascript")
     {
-        m_settings.js_runtime = draw_entry_menu(
-            "Choose a Javascript runtime", vec_from_array(config_doc["languages"][m_settings.language]["js_runtimes"]),
-            m_settings.js_runtime);
+        m_settings.js_runtime =
+            draw_entry_menu("Choose a Javascript runtime",
+                            vec_from_obj_array(config_doc["languages"][m_settings.language]["js_runtimes"], "name"),
+                            m_settings.js_runtime);
+        m_settings.js_runtime =
+            find_value_from_obj_array(config_doc["languages"][m_settings.language]["js_runtimes"], m_settings.js_runtime, "binary");
+
         m_settings.package_manager =
             draw_entry_menu("Choose a preferred package manager to use",
                             vec_from_array(config_doc["languages"][m_settings.language]["package_managers"]),

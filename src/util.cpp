@@ -30,9 +30,9 @@
 #include <ncurses.h>
 #include <unistd.h>
 
-#include <cstdio>
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <iterator>
 #include <string>
 #include <unordered_map>
@@ -426,6 +426,35 @@ void update_json_field(rapidjson::Document& pkg_doc, const std::string& field, c
         pkg_doc.AddMember(rapidjson::Value(field.c_str(), field.length(), allocator),
                           rapidjson::Value(value.c_str(), value.length(), allocator), allocator);
     }
+}
+
+std::string find_value_from_obj_array(const rapidjson::Value& array, const std::string& name, const std::string& value)
+{
+    if (!array.IsArray())
+        return {};
+
+    for (const auto& obj : array.GetArray())
+    {
+        if (obj.HasMember("name") && obj["name"].IsString() && name == obj["name"].GetString())
+        {
+            if (obj.HasMember(value) && obj[value].IsString())
+                return obj[value].GetString();
+        }
+    }
+    return {};
+}
+
+std::vector<std::string> vec_from_obj_array(const rapidjson::Value& array, const std::string& name)
+{
+    if (!array.IsArray())
+        return {};
+
+    std::vector<std::string> ret;
+
+    for (const auto& obj : array.GetArray())
+        if (obj.HasMember(name) && obj[name].IsString())
+            ret.push_back(obj[name].GetString());
+    return ret;
 }
 
 }  // namespace JsonUtils

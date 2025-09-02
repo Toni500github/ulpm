@@ -149,7 +149,7 @@ bool parse_init_args(int argc, char* argv[])
             case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
             case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
             case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
-	    case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
+            case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
             case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
         }
     }
@@ -191,7 +191,7 @@ bool parse_set_args(int argc, char* argv[])
             case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
             case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
             case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
-	    case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
+            case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
             case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
         }
     }
