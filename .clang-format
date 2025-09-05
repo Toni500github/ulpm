@@ -66,6 +66,8 @@ AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
 CompactNamespaces: false
+ShortNamespaceLines: 1
+SortUsingDeclarations: Lexicographic
 
 AlignConsecutiveShortCaseStatements:
   Enabled: true

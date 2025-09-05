@@ -336,7 +336,7 @@ skip_menu:
         info("Initializing cargo project ...");
         if (Process("cargo init").get_exit_status() != 0)
         {
-            warn_stat("Failed to run 'cargo init'. We going to do it ourself");
+            warn_stat("Failed to run 'cargo init'. We're going to do it ourself");
             info("Creating main entry at 'src/main.rs' ...");
             fs::create_directory("src");
             output_to_file("src/main.rs", "fn main() {\n\tprintln!(\"Hello, World!\");\n}");

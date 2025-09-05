@@ -26,6 +26,7 @@
 #include <ncurses.h>
 
 #include <cstdlib>
+#include <iostream>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -43,6 +44,50 @@
 #endif
 
 #include "getopt_port/getopt.h"
+
+#if (defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__) || defined(__CYGWIN__) || \
+     defined(__MINGW32__) || defined(__MINGW64__))
+# define PLATFORM_WINDOWS 1
+#else
+# define PLATFORM_WINDOWS 0
+#endif
+
+#if PLATFORM_WINDOWS
+# include <windows.h>
+
+void enableANSI()
+{
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD dwMode = 0;
+    GetConsoleMode(hOut, &dwMode);
+    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(hOut, dwMode);
+}
+
+#else
+#include <unistd.h>
+#include <termios.h>
+#include <stdlib.h>
+#include <sys/ioctl.h>
+
+struct termios orig_termios;
+
+void disable_raw_mode(void)
+{
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+void enable_raw_mode(void)
+{
+    tcgetattr(STDIN_FILENO, &orig_termios);
+    atexit(disable_raw_mode);
+
+    struct termios raw = orig_termios;
+    raw.c_lflag &= ~(ECHO | ICANON);  // Disable echo and canonical mode
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+#endif
 
 enum OPs
 {
@@ -126,7 +171,7 @@ bool parse_init_args(int argc, char* argv[])
         {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
         {"license",             required_argument, nullptr, "license"_fnv1a16},
         {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
-	{"project_version",	required_argument, nullptr, "project_version"_fnv1a16},
+        {"project_version",	required_argument, nullptr, "project_version"_fnv1a16},
         {"author",              required_argument, nullptr, "author"_fnv1a16},
         {0, 0, 0, 0}
     };
@@ -168,7 +213,7 @@ bool parse_set_args(int argc, char* argv[])
         {"package_manager",     required_argument, nullptr, "package_manager"_fnv1a16},
         {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
         {"license",             required_argument, nullptr, "license"_fnv1a16},
-	{"project_version",     required_argument, nullptr, "project_version"_fnv1a16},
+        {"project_version",     required_argument, nullptr, "project_version"_fnv1a16},
         {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
         {"author",              required_argument, nullptr, "author"_fnv1a16},
         {0, 0, 0, 0}
@@ -236,6 +281,15 @@ static bool parseargs(int argc, char* argv[])
         {0,0,0,0}
     };
 
+#if PLATFORM_WINDOWS
+    if (argc < 2)
+    {
+        fmt::println("Please run ulpm through a terminal interface like cmd or msys2.");
+        system("pause");
+        return false;
+    }
+#endif
+
     // clang-format on
     optind = 1;
     while ((opt = getopt_long(argc, argv, optstring, opts, &option_index)) != -1)
@@ -283,30 +337,45 @@ int main(int argc, char* argv[])
         if (Settings::manifest_defaults.js_main_src.empty())
             Settings::manifest_defaults.js_main_src = "src/main.js";
         if (Settings::manifest_defaults.js_runtime.empty())
-            Settings::manifest_defaults.js_runtime = "node";
+            Settings::manifest_defaults.js_runtime = "Node.js";
     }
     Settings::Manifest man;
-    if (op == INIT)
+
+#if PLATFORM_WINDOWS
+    enableANSI();
+#else
+    enable_raw_mode();
+#endif
+
+    switch (op)
     {
-        if (!cmd_options.init_yes)
-        {
-            initscr();
-            noecho();
-            cbreak();              // Enable immediate character input
-            keypad(stdscr, TRUE);  // Enable arrow keys
-            curs_set(1);           // Show cursor
-        }
-        man.init_project(cmd_options);
-    }
-    else if (op == SET)
-    {
-        man.set_project_settings(cmd_options);
-    }
-    else if (op == RUN || op == INSTALL || op == BUILD)
-    {
-        man.validate_manifest();
-        man.run_cmd(cmd, cmd_options.arguments);
+        case INIT:
+            if (!cmd_options.init_yes)
+            {
+                initscr();
+                noecho();
+                cbreak();              // Enable immediate character input
+                keypad(stdscr, TRUE);  // Enable arrow keys
+                curs_set(1);           // Show cursor
+            }
+            man.init_project(cmd_options);
+            break;
+
+        case SET: man.set_project_settings(cmd_options); break;
+
+        case RUN:
+        case INSTALL:
+        case BUILD:
+            man.validate_manifest();
+            man.run_cmd(cmd, cmd_options.arguments);
+            break;
+
+        default: help(ulpm_help, EXIT_FAILURE);
     }
 
-    return 0;
+#if !PLATFORM_WINDOWS
+    disable_raw_mode();
+#endif
+
+    return EXIT_SUCCESS;
 }

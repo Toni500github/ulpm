@@ -434,13 +434,9 @@ std::string find_value_from_obj_array(const rapidjson::Value& array, const std::
         return {};
 
     for (const auto& obj : array.GetArray())
-    {
-        if (obj.HasMember("name") && obj["name"].IsString() && name == obj["name"].GetString())
-        {
-            if (obj.HasMember(value) && obj[value].IsString())
-                return obj[value].GetString();
-        }
-    }
+        if (obj.HasMember("name") && obj["name"].IsString() && name == obj["name"].GetString() &&
+            obj.HasMember(value) && obj[value].IsString())
+            return obj[value].GetString();
     return {};
 }
 
