@@ -25,6 +25,8 @@ It helps you:
 2. **Bridge, Not Replacement:** `ulpm` does not replace `npm` or `cargo`. It acts as a bridge, reading your configuration and calling the correct underlying commands for you.
 3. **Interactive Menus:** The tool uses a text-based interface (powered by `ncurses`) to provide a smooth user experience during project setup.
 
+https://github.com/user-attachments/assets/369b6775-0bf4-4ec9-ba28-d137b2b76ca4
+
 ## Quick Start
 
 ### From Source
