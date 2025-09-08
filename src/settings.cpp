@@ -27,6 +27,7 @@
 #define TOML_HEADER_ONLY 0
 #include "settings.hpp"
 
+#include <ncurses.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -246,8 +247,7 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
 {
     if (!m_doc.ObjectEmpty())
     {
-        if (cmd_options.init_force ||
-            askUserYorN(false, "The manifest {} is not empty. Do you want to overwrite all options?", MANIFEST_NAME))
+        if ((cmd_options.init_force || cmd_options.init_yes) || askUserYorN(false, "The manifest {} is not empty. Do you want to overwrite all options?", MANIFEST_NAME))
         {
             fclose(m_file);
             m_file = fopen(MANIFEST_NAME, "w+");
@@ -257,11 +257,21 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
             fclose(m_file);
             m_file = fopen(MANIFEST_NAME, "r+");
         }
+        else
+            die("Balling out. The manifest {} is not empty. Rerun with -f to overwrite");
     }
     // --yes doesn't open menus and accept only my cli arguments
     if (cmd_options.init_yes)
     {
         goto skip_menu;
+    }
+    else
+    {
+        initscr();
+        noecho();
+        cbreak();              // Enable immediate character input
+        keypad(stdscr, TRUE);  // Enable arrow keys
+        curs_set(1);           // Show cursor
     }
 
     m_settings.language = draw_entry_menu("Which language do you want to use?",

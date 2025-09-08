@@ -26,7 +26,6 @@
 #include <ncurses.h>
 
 #include <cstdlib>
-#include <iostream>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -44,50 +43,6 @@
 #endif
 
 #include "getopt_port/getopt.h"
-
-#if (defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__) || defined(__CYGWIN__) || \
-     defined(__MINGW32__) || defined(__MINGW64__))
-# define PLATFORM_WINDOWS 1
-#else
-# define PLATFORM_WINDOWS 0
-#endif
-
-#if PLATFORM_WINDOWS
-# include <windows.h>
-
-void enableANSI()
-{
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD dwMode = 0;
-    GetConsoleMode(hOut, &dwMode);
-    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(hOut, dwMode);
-}
-
-#else
-#include <unistd.h>
-#include <termios.h>
-#include <stdlib.h>
-#include <sys/ioctl.h>
-
-struct termios orig_termios;
-
-void disable_raw_mode(void)
-{
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
-}
-
-void enable_raw_mode(void)
-{
-    tcgetattr(STDIN_FILENO, &orig_termios);
-    atexit(disable_raw_mode);
-
-    struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON);  // Disable echo and canonical mode
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
-
-#endif
 
 enum OPs
 {
@@ -341,23 +296,9 @@ int main(int argc, char* argv[])
     }
     Settings::Manifest man;
 
-#if PLATFORM_WINDOWS
-    enableANSI();
-#else
-    enable_raw_mode();
-#endif
-
     switch (op)
     {
         case INIT:
-            if (!cmd_options.init_yes)
-            {
-                initscr();
-                noecho();
-                cbreak();              // Enable immediate character input
-                keypad(stdscr, TRUE);  // Enable arrow keys
-                curs_set(1);           // Show cursor
-            }
             man.init_project(cmd_options);
             break;
 
@@ -372,10 +313,6 @@ int main(int argc, char* argv[])
 
         default: help(ulpm_help, EXIT_FAILURE);
     }
-
-#if !PLATFORM_WINDOWS
-    disable_raw_mode();
-#endif
 
     return EXIT_SUCCESS;
 }
