@@ -23,26 +23,29 @@
  *
  */
 
-#include <ncurses.h>
-
 #include <cstdlib>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "box.hpp"
 #include "fmt/base.h"
 #include "fmt/compile.h"
 #include "settings.hpp"
 #include "switch_fnv1a.hpp"
+#include "terminal_display.hpp"
 #include "texts.hpp"
 
 #if (!__has_include("version.h"))
-#error "version.h not found, please generate it with ./scripts/generateVersion.sh"
+#  error "version.h not found, please generate it with ./scripts/generateVersion.sh"
 #else
-#include "version.h"
+#  include "version.h"
 #endif
 
 #include "getopt_port/getopt.h"
+
+TerminalDisplay display;
+TermBox         termbox;
 
 enum OPs
 {
@@ -55,9 +58,11 @@ enum OPs
 } op = NONE;
 
 static std::string                                     cmd;
-static const std::unordered_map<std::string_view, OPs> map{
-    { "install", INSTALL }, { "build", BUILD }, { "init", INIT }, { "run", RUN }, { "set", SET }
-};
+static const std::unordered_map<std::string_view, OPs> map{ { "install", INSTALL },
+                                                            { "build", BUILD },
+                                                            { "init", INIT },
+                                                            { "run", RUN },
+                                                            { "set", SET } };
 
 struct cmd_options_t cmd_options;
 
@@ -74,7 +79,13 @@ void version()
         "ulpm {} built from branch '{}' at {} commit '{}' ({}).\n"
         "Date: {}\n"
         "Tag: {}\n",
-        VERSION, GIT_BRANCH, GIT_DIRTY, GIT_COMMIT_HASH, GIT_COMMIT_MESSAGE, GIT_COMMIT_DATE, GIT_TAG);
+        VERSION,
+        GIT_BRANCH,
+        GIT_DIRTY,
+        GIT_COMMIT_HASH,
+        GIT_COMMIT_MESSAGE,
+        GIT_COMMIT_DATE,
+        GIT_TAG);
 
     // if only everyone would not return error when querying the program version :(
     std::exit(EXIT_SUCCESS);
@@ -299,6 +310,7 @@ int main(int argc, char* argv[])
     switch (op)
     {
         case INIT:
+            display.begin();
             man.init_project(cmd_options);
             break;
 

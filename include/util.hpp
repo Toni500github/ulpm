@@ -29,6 +29,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -40,7 +41,8 @@
 /* Write error message and exit if EOF (or CTRL-D most of the time)
  * @param cin The std::cin used for getting the input
  */
-void ctrl_d_handler(const std::istream& cin);
+void                     ctrl_d_handler(const std::istream& cin);
+std::vector<std::string> split(const std::string_view text, const char delim);
 
 #if DEBUG
 inline bool debug_print = true;
@@ -51,15 +53,15 @@ inline bool debug_print = false;
 template <typename... Args>
 void error(const std::string_view fmt, Args&&... args) noexcept
 {
-    fmt::print(stderr, "ulpm: \033[1;31mERROR: {}\033[0m\n",
-               fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
+    fmt::print(
+        stderr, "ulpm: \033[1;31mERROR: {}\033[0m\n", fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
 }
 
 template <typename... Args>
 void die(const std::string_view fmt, Args&&... args) noexcept
 {
-    fmt::print(stderr, "ulpm: \033[1;31mFATAL: {}\033[0m\n",
-               fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
+    fmt::print(
+        stderr, "ulpm: \033[1;31mFATAL: {}\033[0m\n", fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
     std::exit(1);
 }
 
@@ -85,8 +87,8 @@ void info(const std::string_view fmt, Args&&... args) noexcept
 template <typename... Args>
 void warn_stat(const std::string_view fmt, Args&&... args) noexcept
 {
-    fmt::print(stderr, "ulpm: \033[1;33mWARNING: {}\033[0m\n",
-               fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
+    fmt::print(
+        stderr, "ulpm: \033[1;33mWARNING: {}\033[0m\n", fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
 }
 
 template <typename... Args>
@@ -125,8 +127,9 @@ bool askUserYorN(bool def, const std::string_view fmt, Args&&... args)
 
 bool        hasStart(const std::string_view fullString, const std::string_view start);
 int         str_to_enum(const std::unordered_map<std::string, int>& map, const std::string_view name);
-std::string draw_entry_menu(const std::string& prompt, const std::vector<std::string>& entries,
-                            const std::string& default_option);
+std::string draw_entry_menu(const std::string&              prompt,
+                            const std::vector<std::string>& entries,
+                            const std::string&              default_option);
 std::string draw_input_menu(const std::string& prompt, const std::string& default_option);
 
 namespace JsonUtils

@@ -1,9 +1,16 @@
-#include <ncurses.h>
-#include <wchar.h>
+#include "box.hpp"
 
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
+
+static constexpr uint32_t BOX_ULCORNER = U'┌';
+static constexpr uint32_t BOX_URCORNER = U'┐';
+static constexpr uint32_t BOX_LLCORNER = U'└';
+static constexpr uint32_t BOX_LRCORNER = U'┘';
+static constexpr uint32_t BOX_HLINE    = U'─';
+static constexpr uint32_t BOX_VLINE    = U'│';
 
 static std::vector<std::string> wrap_text(const std::string& text, const size_t max_width)
 {
@@ -25,99 +32,104 @@ static std::vector<std::string> wrap_text(const std::string& text, const size_t 
     return lines;
 }
 
-// Begin: some code taken from https://github.com/rofl0r/ncdu in src/delete.c and src/util.c
-#define ncaddstr(r, c, s) mvaddstr(subwinr + (r), subwinc + (c), s)
-#define ncmove(r, c) move(subwinr + (r), subwinc + (c))
-
-int subwinr;
-int subwinc;
-
-static void nccreate(int height, int width, const char* title)
+void TermBox::DrawBox(int x, int y, int width, int height, const std::string_view title)
 {
-    int i;
+    resetColors();
+    for (int row = y; row < y + height; ++row)
+        for (int col = x; col < x + width; ++col)
+            drawPixel(col, row, U' ');
 
-    int winrows, wincols;
-    getmaxyx(stdscr, winrows, wincols);
-    subwinr = winrows / 2 - height / 2;
-    subwinc = wincols / 2 - width / 2;
-
-    /* clear window */
-    for (i = 0; i < height; i++)
-        mvhline(subwinr + i, subwinc, ' ', width);
-
-    /* box() only works around curses windows, so create our own */
-    move(subwinr, subwinc);
-    addch(ACS_ULCORNER);
-    for (i = 0; i < width - 2; i++)
-        addch(ACS_HLINE);
-    addch(ACS_URCORNER);
-
-    move(subwinr + height - 1, subwinc);
-    addch(ACS_LLCORNER);
-    for (i = 0; i < width - 2; i++)
-        addch(ACS_HLINE);
-    addch(ACS_LRCORNER);
-
-    mvvline(subwinr + 1, subwinc, ACS_VLINE, height - 2);
-    mvvline(subwinr + 1, subwinc + width - 1, ACS_VLINE, height - 2);
-
-    /* title */
-    attron(A_BOLD);
-    mvaddstr(subwinr, subwinc + 4, title);
-    attroff(A_BOLD);
-}
-
-static void ncprint(int r, int c, const char* fmt, ...)
-{
-    va_list arg;
-    va_start(arg, fmt);
-    move(subwinr + r, subwinc + c);
-    vw_printw(stdscr, fmt, arg);
-    va_end(arg);
-}
-
-void draw_exit_confirm(const int seloption)
-{
-    nccreate(6, 60, "Confirm exiting");
-
-    ncprint(1, 2, "Are you sure you want to exit? All changes will be lost.");
-
-    if (seloption == 1)
-        attron(A_REVERSE);
-    ncaddstr(4, 20, "yes");
-    attroff(A_REVERSE);
-
-    if (seloption == 0)
-        attron(A_REVERSE);
-    ncaddstr(4, 34, "no");
-    attroff(A_REVERSE);
-
-    switch (seloption)
+    for (int col = x + 1; col < x + width - 1; ++col)
     {
-        case 0: ncmove(4, 20); break;
-        case 1: ncmove(4, 34); break;
+        drawPixel(col, y, BOX_HLINE);
+        drawPixel(col, y + height - 1, BOX_HLINE);
     }
+
+    for (int row = y + 1; row < y + height - 1; ++row)
+    {
+        drawPixel(x, row, BOX_VLINE);
+        drawPixel(x + width - 1, row, BOX_VLINE);
+    }
+
+    drawPixel(x, y, BOX_ULCORNER);
+    drawPixel(x + width - 1, y, BOX_URCORNER);
+    drawPixel(x, y + height - 1, BOX_LLCORNER);
+    drawPixel(x + width - 1, y + height - 1, BOX_LRCORNER);
+
+    setCursor(x + 4, y);
+    print("{}", title);
 }
-// End: some code taken from https://github.com/rofl0r/ncdu in src/delete.c and src/util.c
 
-// omfg too many args
-void draw_search_box(const std::string& query, const std::string& text, const std::vector<std::string>& results,
-                     const size_t selected, size_t& scroll_offset, const size_t cursor_x, const bool is_search_tab)
+void TermBox::DrawExitConfirm(const int seloption)
 {
-    erase();
-    box(stdscr, 0, 0);
+    const int width  = 60;
+    const int height = 6;
+    const int box_x  = (getWidth() - width) / 2;
+    const int box_y  = (getHeight() - height) / 2;
 
-    int maxy, maxx;
-    getmaxyx(stdscr, maxy, maxx);
+    DrawBox(box_x, box_y, width, height, "Confirm exit");
 
-    // header
-    attron(A_BOLD);
-    mvprintw(1, 2, "Search: %s", query.c_str());
-    mvprintw(3, 4, "%s", text.c_str());
-    attroff(A_BOLD);
+    setCursor(box_x + 2, box_y + 1);
+    print("Are you sure you want to exit? All changes will be lost.");
 
-    // First ensure selected item is visible
-    size_t lines_above = 0;
+    // yes option (column 20 relative to box)
+    if (seloption)
+        setTextBgColor(TB_REVERSE);
+    setCursor(box_x + 20, box_y + 4);
+    print("yes");
+    resetColors();
+
+    // no option (column 34 relative to box)
+    if (!seloption)
+        setTextBgColor(TB_REVERSE);
+    setCursor(box_x + 34, box_y + 4);
+    print("no");
+    resetColors();
+
+    display();
+}
+
+void TermBox::DrawSearchBox(const std::string&              query,
+                            const std::string&              text,
+                            const std::vector<std::string>& results,
+                            const size_t                    selected,
+                            size_t&                         scroll_offset,
+                            const size_t                    cursor_x,
+                            const bool                      is_search_tab)
+{
+    clearDisplay();
+
+    const int maxx = getWidth();
+    const int maxy = getHeight();
+
+    // Outer border
+    drawRect(0, 0, maxx, maxy, BOX_VLINE);  // placeholder char; we redraw properly
+    // Redraw border with correct box-drawing characters
+    drawPixel(0, 0, BOX_ULCORNER);
+    drawPixel(maxx - 1, 0, BOX_URCORNER);
+    drawPixel(0, maxy - 1, BOX_LLCORNER);
+    drawPixel(maxx - 1, maxy - 1, BOX_LRCORNER);
+    for (int c = 1; c < maxx - 1; ++c)
+    {
+        drawPixel(c, 0, BOX_HLINE);
+        drawPixel(c, maxy - 1, BOX_HLINE);
+    }
+    for (int r = 1; r < maxy - 1; ++r)
+    {
+        drawPixel(0, r, BOX_VLINE);
+        drawPixel(maxx - 1, r, BOX_VLINE);
+    }
+
+    // Header
+    setCursor(2, 1);
+    setTextColor(TB_BOLD);
+    print("Search: {}", query);
+    resetColors();
+
+    setCursor(4, 3);
+    print("{}", text);
+
+    // Ensure selected item is visible
     if (selected < scroll_offset)
     {
         scroll_offset = selected;
@@ -128,16 +140,12 @@ void draw_search_box(const std::string& query, const std::string& text, const st
         size_t needed_lines = 5;  // header + spacing (1)
         for (size_t i = scroll_offset; i <= selected && i < results.size(); i++)
         {
-            const auto& wrapped = wrap_text(results[i], maxx - 11);
+            const auto& wrapped = wrap_text(results[i], static_cast<size_t>(maxx) - 11);
             needed_lines += wrapped.size() + 1;
-            if (needed_lines > static_cast<size_t>(maxy - 1))
+            if (needed_lines > static_cast<size_t>(maxy - 2))
             {
                 scroll_offset = i;
                 break;
-            }
-            if (i == selected)
-            {
-                lines_above = needed_lines - (1 + wrapped.size());
             }
         }
     }
@@ -147,10 +155,10 @@ void draw_search_box(const std::string& query, const std::string& text, const st
     for (size_t i = scroll_offset; i < results.size(); ++i)
     {
         const bool  is_selected = (i == selected);
-        const auto& wrapped     = wrap_text(results[i], maxx - 11);
+        const auto& wrapped     = wrap_text(results[i], static_cast<size_t>(maxx) - 11);
 
         // Check space for this item
-        if (row + 1 + wrapped.size() >= static_cast<size_t>(maxy - 1))
+        if (row + 1 + wrapped.size() >= size_t(maxy - 2))
             break;
 
         // Draw item
@@ -158,56 +166,74 @@ void draw_search_box(const std::string& query, const std::string& text, const st
         for (const std::string& line : wrapped)
         {
             if (is_selected && !is_search_tab)
-                attron(A_REVERSE);
-            mvprintw(++row, 6, "%s", line.c_str());
+                setTextColor(TB_REVERSE);
+
+            setCursor(6, ++row);
+            print("{}", line);
+
             if (is_selected && !is_search_tab)
-                attroff(A_REVERSE);
+                resetColors();
         }
     }
 
+    // Position cursor
     if (is_search_tab)
-        move(1, cursor_x);
+        showCursor(static_cast<int>(cursor_x), 1);
     else
-        // Calculate cursor row based on lines above selected item
-        move(3 + lines_above, 6);
+        hideCursor();
 
-    refresh();
+    display();
 }
 
-void draw_input_box(WINDOW* win, const std::string& prompt, const std::string& input, const size_t cursor_pos)
+void TermBox::DrawInputBox(int                win_x,
+                           int                win_y,
+                           int                win_w,
+                           int                win_h,
+                           const std::string& prompt,
+                           const std::string& input,
+                           const size_t       cursor_pos)
 {
-    werase(win);
-    box(win, 0, 0);
+    // Clear and draw box
+    for (int row = win_y; row < win_y + win_h; ++row)
+        for (int col = win_x; col < win_x + win_w; ++col)
+            drawPixel(col, row, U' ');
 
-    int maxx = getmaxx(stdscr);
+    DrawBox(win_x, win_y, win_w, win_h, "");
 
-    // Draw prompt
-    wattron(win, A_BOLD);
-    mvwprintw(win, 1, 2, "%s:", prompt.c_str());
-    wattroff(win, A_BOLD);
+    // Prompt
+    setCursor(win_x + 2, win_y + 1);
+    print("{}:", prompt);
 
-    // Calculate available space for input field (considering prompt and borders)
-    int input_start_x   = 2 + prompt.length() + 1;
-    int available_width = maxx - input_start_x - 2;  // -2 for right border and padding
+    // Input field
+    const int input_start_x   = win_x + 2 + static_cast<int>(prompt.length()) + 1;
+    const int available_width = win_x + win_w - input_start_x - 2;
 
-    // Draw input field with background
-    wattron(win, A_REVERSE);
-    for (int i = 0; i < available_width; i++)
-    {
-        if (i < static_cast<int>(input.length()))
-            mvwaddch(win, 1, input_start_x + i, input[i]);
-        else
-            mvwaddch(win, 1, input_start_x + i, ' ');
-    }
-    wattroff(win, A_REVERSE);
+    setTextColor(TB_REVERSE);
+    std::string field = input.substr(0, available_width);
+    field.resize(available_width, ' ');
+    setCursor(input_start_x, win_y + 1);
+    print("{}", field);
+    resetColors();
 
-    // Draw instructions
-    mvwprintw(win, 3, 2, "Enter: Submit");
-    mvwprintw(win, 4, 2, "ESC: Exit");
+    // Instructions
+    setCursor(win_x + 2, win_y + 3);
+    print("Enter: Submit");
+    setCursor(win_x + 2, win_y + 4);
+    print("ESC: Exit");
 
-    // Position cursor
-    size_t display_cursor_pos = std::min(cursor_pos, static_cast<size_t>(available_width - 1));
-    wmove(win, 1, input_start_x + display_cursor_pos);
-    curs_set(1);
-    wrefresh(win);
+    // Position cursor within the input field
+    const size_t display_cursor_pos = std::min(cursor_pos, static_cast<size_t>(available_width - 1));
+    showCursor(input_start_x + static_cast<int>(display_cursor_pos), win_y + 1);
+
+    display();
+}
+
+void TermBox::DrawInputBox(const std::string& prompt, const std::string& input, const size_t cursor_pos)
+{
+    const int width  = getWidth() - 4;  // leave a 2-col margin each side
+    const int height = 7;               // same as the windowed version
+    const int win_x  = (getWidth() - width) / 2;
+    const int win_y  = (getHeight() - height) / 2;
+
+    DrawInputBox(win_x, win_y, width, height, prompt, input, cursor_pos);
 }

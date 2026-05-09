@@ -24,10 +24,9 @@
  */
 
 #define RAPIDJSON_HAS_STDSTRING 1
-#define TOML_HEADER_ONLY 0
+#define TOML_HEADER_ONLY        0
 #include "settings.hpp"
 
-#include <ncurses.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -167,7 +166,8 @@ void Manifest::validate_manifest()
     if (!m_doc.HasMember("language") || !m_doc["language"].IsString())
         die("Missing/Non-string field 'language' in {}", MANIFEST_NAME);
     if (!config_doc["languages"].HasMember(m_settings.language))
-        die("Invalid language '{}'. Valid: {}", m_settings.language,
+        die("Invalid language '{}'. Valid: {}",
+            m_settings.language,
             fmt::join(vec_from_members(config_doc["languages"]), ", "));
 
     // check package_manager
@@ -176,8 +176,10 @@ void Manifest::validate_manifest()
     const std::vector<std::string>& lang_pm =
         vec_from_array(config_doc["languages"][m_settings.language]["package_managers"]);
     if (std::find(lang_pm.begin(), lang_pm.end(), m_settings.package_manager) == lang_pm.end())
-        die("Invalid package manager '{}' for language '{}'. Valid: {}", m_settings.package_manager,
-            m_settings.language, fmt::join(lang_pm, ", "));
+        die("Invalid package manager '{}' for language '{}'. Valid: {}",
+            m_settings.package_manager,
+            m_settings.language,
+            fmt::join(lang_pm, ", "));
 
     // check license
     if (!m_doc.HasMember("license") || !m_doc["license"].IsString())
@@ -207,7 +209,8 @@ Manifest::Manifest() : m_settings(manifest_defaults)
 {
     if (config_doc.Parse(config_json).HasParseError())
     {
-        die("Error config_json: {} at offset {}", rapidjson::GetParseError_En(config_doc.GetParseError()),
+        die("Error config_json: {} at offset {}",
+            rapidjson::GetParseError_En(config_doc.GetParseError()),
             config_doc.GetErrorOffset());
     }
 
@@ -247,7 +250,8 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
 {
     if (!m_doc.ObjectEmpty())
     {
-        if ((cmd_options.init_force || cmd_options.init_yes) || askUserYorN(false, "The manifest {} is not empty. Do you want to overwrite all options?", MANIFEST_NAME))
+        if ((cmd_options.init_force || cmd_options.init_yes) ||
+            askUserYorN(false, "The manifest {} is not empty. Do you want to overwrite all options?", MANIFEST_NAME))
         {
             fclose(m_file);
             m_file = fopen(MANIFEST_NAME, "w+");
@@ -260,30 +264,23 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
         else
             die("Balling out. The manifest {} is not empty. Rerun with -f to overwrite");
     }
+
     // --yes doesn't open menus and accept only my cli arguments
     if (cmd_options.init_yes)
     {
         goto skip_menu;
     }
-    else
-    {
-        initscr();
-        noecho();
-        cbreak();              // Enable immediate character input
-        keypad(stdscr, TRUE);  // Enable arrow keys
-        curs_set(1);           // Show cursor
-    }
 
-    m_settings.language = draw_entry_menu("Which language do you want to use?",
-                                          vec_from_members(config_doc["languages"]), m_settings.language);
+    m_settings.language = draw_entry_menu(
+        "Which language do you want to use?", vec_from_members(config_doc["languages"]), m_settings.language);
     if (m_settings.language == "javascript")
     {
         m_settings.js_runtime =
             draw_entry_menu("Choose a Javascript runtime",
                             vec_from_obj_array(config_doc["languages"][m_settings.language]["js_runtimes"], "name"),
                             m_settings.js_runtime);
-        m_settings.js_runtime =
-            find_value_from_obj_array(config_doc["languages"][m_settings.language]["js_runtimes"], m_settings.js_runtime, "binary");
+        m_settings.js_runtime = find_value_from_obj_array(
+            config_doc["languages"][m_settings.language]["js_runtimes"], m_settings.js_runtime, "binary");
 
         m_settings.package_manager =
             draw_entry_menu("Choose a preferred package manager to use",
@@ -293,9 +290,10 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
     else if (m_settings.language == "rust")
     {
         m_settings.package_manager = "cargo";
-        m_settings.rust_edition    = draw_entry_menu(
-            "Choose a rust edition", vec_from_array(config_doc["languages"][m_settings.language]["rust_editions"]),
-            m_settings.rust_edition);
+        m_settings.rust_edition =
+            draw_entry_menu("Choose a rust edition",
+                            vec_from_array(config_doc["languages"][m_settings.language]["rust_editions"]),
+                            m_settings.rust_edition);
     }
     else
     {
@@ -304,10 +302,13 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
 
     m_settings.project_name        = draw_input_menu("Name of the project", m_settings.project_name);
     m_settings.project_description = draw_input_menu("Description of the project", m_settings.project_description);
-    m_settings.project_version     = draw_input_menu("Initial Version of the project", m_settings.project_version.empty() ? "v0.0.1" : m_settings.project_version);
-    m_settings.author              = draw_input_menu("Author of the project", m_settings.author.empty() ? "Name <email@example.com>" : m_settings.author);
+    m_settings.project_version     = draw_input_menu(
+        "Initial Version of the project", m_settings.project_version.empty() ? "v0.0.1" : m_settings.project_version);
+    m_settings.author = draw_input_menu("Author of the project",
+                                        m_settings.author.empty() ? "Name <email@example.com>" : m_settings.author);
     if (m_settings.language == "javascript")
-        m_settings.js_main_src = draw_input_menu("Path to main javascript entry", m_settings.js_main_src.empty() ? "src/main.js" : m_settings.js_main_src);
+        m_settings.js_main_src = draw_input_menu(
+            "Path to main javascript entry", m_settings.js_main_src.empty() ? "src/main.js" : m_settings.js_main_src);
 
     m_settings.license =
         draw_entry_menu("Choose a license for the project", vec_from_array(config_doc["licenses"]), m_settings.license);
@@ -376,7 +377,8 @@ void Manifest::create_manifest(std::FILE* file)
 
     m_doc.AddMember("commands", rapidjson::Value(rapidjson::kObjectType), allocator);
     m_doc["commands"].AddMember(rapidjson::Value(m_settings.package_manager.c_str(), m_settings.package_manager.size()),
-                                rapidjson::Value(rapidjson::kObjectType), allocator);
+                                rapidjson::Value(rapidjson::kObjectType),
+                                allocator);
     m_doc["commands"][m_settings.package_manager].AddMember(
         "run",
         rapidjson::Value(config_doc["commands"][m_settings.package_manager]["run"].GetString(),
@@ -394,7 +396,8 @@ void Manifest::create_manifest(std::FILE* file)
         allocator);
 
     m_doc.AddMember(rapidjson::Value(m_settings.language.c_str(), m_settings.language.size()),
-                    rapidjson::Value(rapidjson::kObjectType), allocator);
+                    rapidjson::Value(rapidjson::kObjectType),
+                    allocator);
     if (m_settings.language == "javascript")
     {
         m_doc[m_settings.language].AddMember("runtime", m_settings.js_runtime, allocator);
@@ -445,7 +448,9 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
             die("Parsing config file 'Cargo.toml' failed:\n"
                 "{}\n"
                 "\t(error occurred at line {} column {})",
-                err.description(), err.source().begin.line, err.source().begin.column);
+                err.description(),
+                err.source().begin.line,
+                err.source().begin.column);
         }
     }
 
@@ -464,7 +469,8 @@ void Manifest::set_project_settings(const cmd_options_t& cmd_options)
             rapidjson::Document::AllocatorType& allocator = m_doc.GetAllocator();
             m_doc["commands"].AddMember(
                 rapidjson::Value(m_settings.package_manager.c_str(), m_settings.package_manager.size()),
-                rapidjson::Value(rapidjson::kObjectType), allocator);
+                rapidjson::Value(rapidjson::kObjectType),
+                allocator);
             m_doc["commands"][m_settings.package_manager].AddMember(
                 "run",
                 rapidjson::Value(config_doc["commands"][m_settings.package_manager]["run"].GetString(),
