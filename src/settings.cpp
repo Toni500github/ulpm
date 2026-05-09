@@ -45,6 +45,7 @@
 #include "tiny-process-library/process.hpp"
 #include "toml++/toml.hpp"
 #include "util.hpp"
+#include "terminal_display.hpp"
 
 using namespace Settings;
 using namespace TinyProcessLib;
@@ -314,6 +315,7 @@ void Manifest::init_project(const cmd_options_t& cmd_options)
         draw_entry_menu("Choose a license for the project", vec_from_array(config_doc["licenses"]), m_settings.license);
 
 skip_menu:
+    tb_shutdown();
     create_manifest(m_file);
     fclose(m_file);
 

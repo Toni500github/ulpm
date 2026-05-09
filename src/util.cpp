@@ -102,7 +102,6 @@ std::string draw_entry_menu(const std::string&              prompt,
     std::vector<std::string> results(entries);
     if (entries.empty())
     {
-        tb_shutdown();
         return "";
     }
 
@@ -122,7 +121,7 @@ std::string draw_entry_menu(const std::string&              prompt,
             is_search_tab = false;
     }
 
-    // yeah magic numbers buuuu
+    termbox.clearDisplay();
     termbox.DrawSearchBox(query, prompt, results, selected, scroll_offset, cursor_x, is_search_tab);
 
     bool exit          = false;
@@ -231,7 +230,6 @@ std::string draw_entry_menu(const std::string&              prompt,
             // operation delete and choose "yes"
             else if (exit && key == TB_KEY_ENTER && exit_selected)
             {
-                tb_shutdown();
                 warn("Balling out. All changes are lost");
                 std::exit(1);
             }
@@ -243,7 +241,6 @@ std::string draw_entry_menu(const std::string&              prompt,
             // pressed an item
             else if (key == TB_KEY_ENTER && !results.empty())
             {
-                tb_shutdown();
                 return results[selected];
             }
         }
@@ -259,7 +256,6 @@ std::string draw_entry_menu(const std::string&              prompt,
         }
     }
 
-    tb_shutdown();
     return UNKNOWN;
 }
 
@@ -270,6 +266,7 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
     struct tb_event ev              = {};
     size_t          cursor_x        = INPUT_TITLE_LEN;
 
+    termbox.clearDisplay();
     termbox.DrawInputBox(prompt, input, cursor_x - INPUT_TITLE_LEN);
 
     bool exit          = false;
@@ -290,7 +287,6 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
         {
             if (exit && exit_selected)
             {
-                tb_shutdown();
                 warn("Balling out. All changes are lost");
                 std::exit(1);
             }
@@ -301,7 +297,6 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
             }
             else
             {
-                tb_shutdown();
                 return input;
             }
         }
@@ -349,7 +344,6 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
             termbox.DrawInputBox(prompt, input, cursor_x - INPUT_TITLE_LEN);
     }
 
-    tb_shutdown();
     return "";
 }
 
