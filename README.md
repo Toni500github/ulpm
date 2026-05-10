@@ -23,28 +23,25 @@ It helps you:
 ## How It Works
 1. **The Universal Manifest:** `ulpm` creates and uses a `ulpm.json` file in your project root. This file stores your project's core metadata and tells `ulpm` which language and package manager you're using.
 2. **Bridge, Not Replacement:** `ulpm` does not replace `npm` or `cargo`. It acts as a bridge, reading your configuration and calling the correct underlying commands for you.
-3. **Interactive Menus:** The tool uses a text-based interface (powered by `ncurses`) to provide a smooth user experience during project setup.
+3. **Interactive Menus:** The tool uses a text-based interface (TUI) to provide a smooth user experience during project setup.
 
 https://github.com/user-attachments/assets/369b6775-0bf4-4ec9-ba28-d137b2b76ca4
 
 ## Quick Start
 
 ### From Source
-
-1.  Ensure you have `ncurses` installed (simply search it with your package manager).
-2.  Clone the repository and build the project:
-    ```bash
-    git clone --depth=1 https://github.com/Toni500github/ulpm
-    cd ulpm
-    make DEBUG=0
-    ./build/release/ulpm
-    ```
+Clone the repository and build the project:
+```bash
+$ git clone --depth=1 https://github.com/Toni500github/ulpm
+$ cd ulpm
+$ make DEBUG=0
+$ ./build/release/ulpm
+```
 
 ### From Releases
 
-1.  Ensure you have `ncurses` installed (simply search it with your package manager).
-2.  Download the latest [release](https://github.com/Toni500github/ulpm/releases/latest) based on your OS
-3.  Optional: if no execution permission, run `chmod +x ./ulpm*`
+1.  Download the latest [release](https://github.com/Toni500github/ulpm/releases/latest) based on your OS
+2.  Optional: if no execution permission, run `chmod +x ./ulpm*`
 
 ### Basic Usage
 
@@ -56,12 +53,14 @@ ulpm init
 # Or, create a project quickly without prompts
 ulpm init --language javascript --project_name my_app --license MIT -y
 ```
+
 **2. Run your project scripts:**
 After initialization, you can use `ulpm` to run commands defined in your `package.json` or `Cargo.toml`.
 ```bash
 ulpm run start
 # This executes: `npm run start` or `cargo run`, depending on your project language.
 ```
+
 **3. Modify project settings:**
 Change your project's license and author in one command
 ```bash
@@ -70,5 +69,3 @@ ulpm set --license GPL-3.0 --author "Your Name <email@example.com>"
 
 ## License
 This project is licensed under the BSD 3-Clause license. See the header in the source files for full details.
-
-This README was AI generated with deepseek but reviewed by hand the content
