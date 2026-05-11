@@ -25,8 +25,7 @@
 
 #pragma once
 
-#include <rapidjson/document.h>
-
+#include <cerrno>
 #include <cstdlib>
 #include <iostream>
 #include <string_view>
@@ -35,6 +34,7 @@
 
 #include "fmt/base.h"
 #include "fmt/format.h"
+#include "rapidjson/document.h"
 
 #define UNKNOWN "(unknown)"
 
@@ -43,6 +43,7 @@
  */
 void                     ctrl_d_handler(const std::istream& cin);
 std::vector<std::string> split(const std::string_view text, const char delim);
+void output_to_file(const std::string_view path, const std::string_view content, bool force = false);
 
 #if DEBUG
 inline bool debug_print = true;
@@ -58,7 +59,7 @@ void error(const std::string_view fmt, Args&&... args) noexcept
 }
 
 template <typename... Args>
-void die(const std::string_view fmt, Args&&... args) noexcept
+[[noreturn]] void die(const std::string_view fmt, Args&&... args) noexcept
 {
     fmt::print(
         stderr, "ulpm: \033[1;31mFATAL: {}\033[0m\n", fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
@@ -96,6 +97,35 @@ void info_stat(const std::string_view fmt, Args&&... args) noexcept
 {
     fmt::print("ulpm: \033[1;36mINFO: {}\033[0m\n", fmt::format(fmt::runtime(fmt), std::forward<Args>(args)...));
 }
+
+struct FileHandler
+{
+    FILE* f;
+    FileHandler() : f(nullptr) {}
+    ~FileHandler()
+    {
+        if (f)
+            fclose(f);
+    }
+    FileHandler(const FileHandler&)            = delete;
+    FileHandler& operator=(const FileHandler&) = delete;
+
+    operator FILE*() const { return f; }
+
+    void open(const std::string_view path, const std::string_view mode)
+    {
+        f = fopen(path.data(), mode.data());
+        if (!f)
+            die("Failed to open '{}': {}", path, strerror(errno));
+    }
+
+    void reopen(const std::string_view path, const std::string_view mode)
+    {
+        if (f)
+            fclose(f);
+        open(path, mode);
+    }
+};
 
 /** Ask the user a yes or no question.
  * @param def The default result
@@ -139,7 +169,7 @@ std::vector<std::string> vec_from_members(const rapidjson::Value& obj);
 std::vector<std::string> vec_from_array(const rapidjson::Value& array);
 void                     write_to_json(std::FILE* file, const rapidjson::Document& doc);
 void                     populate_doc(std::FILE* file, rapidjson::Document& doc);
-void                     autogen_empty_json(const std::string_view name);
+void                     autogen_empty_json(const std::string_view name, bool force = false);
 std::string find_value_from_obj_array(const rapidjson::Value& array, const std::string& name, const std::string& value);
 std::vector<std::string> vec_from_obj_array(const rapidjson::Value& array, const std::string& name);
 void update_json_field(rapidjson::Document& pkg_doc, const std::string& field, const std::string& value);

@@ -24,14 +24,23 @@
  */
 
 #include <cstdlib>
+#include <memory>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "backend_registry.hpp"
+#include "backends/js_backend.hpp"
+#include "backends/rust_backend.hpp"
 #include "box.hpp"
 #include "fmt/base.h"
 #include "fmt/compile.h"
-#include "settings.hpp"
+#include "getopt_port/getopt.h"
+#include "manifest.hpp"
+#include "manifest_settings.hpp"
+#include "operations.hpp"
 #include "switch_fnv1a.hpp"
 #include "terminal_display.hpp"
 #include "texts.hpp"
@@ -42,36 +51,31 @@
 #  include "version.h"
 #endif
 
-#include "getopt_port/getopt.h"
-
+BackendRegistry g_registry;
 TerminalDisplay display;
 TermBox         termbox;
 
-enum OPs
+enum class Op
 {
-    NONE,
-    INSTALL,
-    INIT,
-    RUN,
-    BUILD,
-    SET,
-} op = NONE;
+    None,
+    Init,
+    Set,
+    Run,
+    Install,
+    Build
+};
 
-static std::string                                     cmd;
-static const std::unordered_map<std::string_view, OPs> map{ { "install", INSTALL },
-                                                            { "build", BUILD },
-                                                            { "init", INIT },
-                                                            { "run", RUN },
-                                                            { "set", SET } };
+static const std::unordered_map<std::string_view, Op> k_op_map = {
+    { "init", Op::Init }, { "set", Op::Set }, { "run", Op::Run }, { "install", Op::Install }, { "build", Op::Build },
+};
 
-struct cmd_options_t cmd_options;
-
-OPs str_to_enum(const std::string_view name)
+struct parse_result_t
 {
-    if (auto it = map.find(name); it != map.end())
-        return it->second;
-    return NONE;
-}
+    Op                op = Op::None;
+    std::string       cmd;
+    cmd_options_t     opts;
+    manifest_update_t update;
+};
 
 void version()
 {
@@ -91,151 +95,84 @@ void version()
     std::exit(EXIT_SUCCESS);
 }
 
-void help(const std::string_view help_msg, int invalid_opt = false)
+[[noreturn]] void help(const std::string_view help_msg, int invalid_opt = false)
 {
     fmt::print(FMT_COMPILE("{}"), help_msg);
 
     std::exit(invalid_opt);
 }
 
-bool parse_run_args(int argc, char* argv[])
+static void parse_manifest_fields(int                    argc,
+                                  char*                  argv[],
+                                  const bool             allow_yes,
+                                  const std::string_view help_msg,
+                                  cmd_options_t&         opts,
+                                  manifest_update_t&     upd)
 {
     // clang-format off
     const struct option long_opts[] = {
-        {"force", no_argument, nullptr, 'f'},
-        {"help",  no_argument, nullptr, 'h'},
-        {0, 0, 0, 0}
-    };
-    // clang-format on
-
-    int opt;
-    while ((opt = getopt_long(argc, argv, "+fh", long_opts, nullptr)) != -1)
-    {
-        switch (opt)
-        {
-            case 'h': help(ulpm_help_run, EXIT_SUCCESS); break;
-            case '?': help(ulpm_help_run, EXIT_FAILURE); break;
-        }
-    }
-
-    for (int i = optind; i < argc; ++i)
-        cmd_options.arguments.emplace_back(argv[i]);
-
-    return true;
-}
-
-bool parse_init_args(int argc, char* argv[])
-{
-    // clang-format off
-    const struct option long_opts[] = {
-        {"force", no_argument, nullptr, 'f'},
-        {"yes",   no_argument, nullptr, 'y'},
-        {"help",  no_argument, nullptr, 'h'},
-
-        {"language",            required_argument, nullptr, "language"_fnv1a16},
-        {"package_manager",     required_argument, nullptr, "package_manager"_fnv1a16},
+        {"force",               no_argument,       nullptr, 'f'},
+        {"yes",                 no_argument,       nullptr, 'y'},
+        {"help",                no_argument,       nullptr, 'h'},
+        // Common
         {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
-        {"license",             required_argument, nullptr, "license"_fnv1a16},
         {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
-        {"project_version",	required_argument, nullptr, "project_version"_fnv1a16},
-        {"author",              required_argument, nullptr, "author"_fnv1a16},
-        {0, 0, 0, 0}
-    };
-    // clang-format on
-
-    int opt;
-    while ((opt = getopt_long(argc, argv, "+fyh", long_opts, nullptr)) != -1)
-    {
-        switch (opt)
-        {
-            case 0:   break;
-            case '?': help(ulpm_help_init, EXIT_FAILURE); break;
-            case 'h': help(ulpm_help_init, EXIT_SUCCESS); break;
-
-            case 'f': cmd_options.init_force = true; break;
-            case 'y': cmd_options.init_yes = true; break;
-
-            case "language"_fnv1a16:            Settings::manifest_defaults.language = optarg; break;
-            case "package_manager"_fnv1a16:     Settings::manifest_defaults.package_manager = optarg; break;
-            case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
-            case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
-            case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
-            case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
-            case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
-        }
-    }
-
-    return true;
-}
-
-bool parse_set_args(int argc, char* argv[])
-{
-    // clang-format off
-    const struct option long_opts[] = {
-        {"force", no_argument, nullptr, 'f'},
-        {"help",  no_argument, nullptr, 'h'},
-
-        {"language",            required_argument, nullptr, "language"_fnv1a16},
-        {"package_manager",     required_argument, nullptr, "package_manager"_fnv1a16},
-        {"project_name",        required_argument, nullptr, "project_name"_fnv1a16},
-        {"license",             required_argument, nullptr, "license"_fnv1a16},
         {"project_version",     required_argument, nullptr, "project_version"_fnv1a16},
-        {"project_description", required_argument, nullptr, "project_description"_fnv1a16},
         {"author",              required_argument, nullptr, "author"_fnv1a16},
+        {"license",             required_argument, nullptr, "license"_fnv1a16},
+        {"language",            required_argument, nullptr, "language"_fnv1a16},
+        {"package_manager",     required_argument, nullptr, "package_manager"_fnv1a16},
+        // JS-specific
+        {"js_main_src",         required_argument, nullptr, "js_main_src"_fnv1a16},
+        // Rust-specific
+        {"rust_edition",        required_argument, nullptr, "rust_edition"_fnv1a16},
         {0, 0, 0, 0}
     };
     // clang-format on
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "+fh", long_opts, nullptr)) != -1)
+    while ((opt = getopt_long(argc, argv, allow_yes ? "+fyh" : "+fh", long_opts, nullptr)) != -1)
     {
         switch (opt)
         {
-            case 0:   break;
-            case '?': help(ulpm_help_set, EXIT_FAILURE); break;
-            case 'h': help(ulpm_help_set, EXIT_SUCCESS); break;
+            case 'h': help(help_msg, EXIT_SUCCESS);
+            case '?': help(help_msg, EXIT_FAILURE);
+            case 'f': opts.init_force = true; break;
+            case 'y':
+                if (allow_yes)
+                    opts.init_yes = true;
+                break;
 
-            case 'f': cmd_options.init_force = true; break;
-
-            case "language"_fnv1a16:            Settings::manifest_defaults.language = optarg; break;
-            case "package_manager"_fnv1a16:     Settings::manifest_defaults.package_manager = optarg; break;
-            case "license"_fnv1a16:             Settings::manifest_defaults.license = optarg; break;
-            case "project_name"_fnv1a16:        Settings::manifest_defaults.project_name = optarg; break;
-            case "project_description"_fnv1a16: Settings::manifest_defaults.project_description = optarg; break;
-            case "project_version"_fnv1a16:     Settings::manifest_defaults.project_version = optarg; break;
-            case "author"_fnv1a16:              Settings::manifest_defaults.author = optarg; break;
+            case "project_name"_fnv1a16:        upd.project_name = optarg; break;
+            case "project_description"_fnv1a16: upd.project_description = optarg; break;
+            case "project_version"_fnv1a16:     upd.project_version = optarg; break;
+            case "author"_fnv1a16:              upd.author = optarg; break;
+            case "license"_fnv1a16:             upd.license = optarg; break;
+            case "language"_fnv1a16:            upd.language = optarg; break;
+            case "package_manager"_fnv1a16:     upd.package_manager = optarg; break;
+            case "js_main_src"_fnv1a16:         upd.js_main_src = optarg; break;
+            case "rust_edition"_fnv1a16:        upd.rust_edition = optarg; break;
         }
     }
-
-    return true;
 }
 
-bool parse_general_command_args(int argc, char* argv[])
+static void parse_run_args(int argc, char* argv[], std::vector<std::string>& out_args)
 {
-    // clang-format off
-    const struct option long_opts[] = {
-        {"help",  no_argument, nullptr, 'h'},
-        {0, 0, 0, 0}
-    };
-    // clang-format on
-
-    int opt;
+    const struct option long_opts[] = { { "help", no_argument, nullptr, 'h' }, { 0, 0, 0, 0 } };
+    int                 opt;
     while ((opt = getopt_long(argc, argv, "+h", long_opts, nullptr)) != -1)
     {
         switch (opt)
         {
-            case 'h': help(ulpm_help, EXIT_SUCCESS); break;
-            case '?': help(ulpm_help, EXIT_FAILURE); break;
+            case 'h': help(ulpm_help_run, EXIT_SUCCESS);
+            case '?': help(ulpm_help_run, EXIT_FAILURE);
         }
     }
-
     for (int i = optind; i < argc; ++i)
-        cmd_options.arguments.emplace_back(argv[i]);
-
-    return true;
+        out_args.emplace_back(argv[i]);
 }
 
-static bool parseargs(int argc, char* argv[])
+static std::optional<parse_result_t> parseargs(int argc, char* argv[])
 {
     // clang-format off
     int opt = 0;
@@ -246,15 +183,14 @@ static bool parseargs(int argc, char* argv[])
         {"help",    no_argument, 0, 'h'},
         {0,0,0,0}
     };
+    // clang-format on
 
-#if PLATFORM_WINDOWS
     if (argc < 2)
     {
         fmt::println("Please run ulpm through a terminal interface like cmd or msys2.");
         system("pause");
-        return false;
+        return std::nullopt;
     }
-#endif
 
     // clang-format on
     optind = 1;
@@ -267,63 +203,67 @@ static bool parseargs(int argc, char* argv[])
 
             case 'V': version(); break;
             case 'h': help(ulpm_help, EXIT_SUCCESS); break;
-            default:  return false;
         }
     }
 
     if (optind >= argc)
         help(ulpm_help, EXIT_FAILURE);  // no subcommand
 
-    cmd             = argv[optind];
+    parse_result_t res;
+    res.cmd = argv[optind];
+
+    if (auto it = k_op_map.find(res.cmd); it != k_op_map.end())
+        res.op = it->second;
+
     int    sub_argc = argc - optind - 1;
     char** sub_argv = argv + optind + 1;
+    optind          = 0;  // reset for subcommand parsing
 
-    op = str_to_enum(cmd);
-    switch (op)
+    switch (res.op)
     {
-        case RUN:  optind = 0; return parse_run_args(sub_argc, sub_argv);
-        case INIT: optind = 0; return parse_init_args(sub_argc, sub_argv);
-        case SET:  optind = 0; return parse_set_args(sub_argc, sub_argv);
-        default:   optind = 0; return parse_general_command_args(sub_argc, sub_argv);
+        case Op::Init:    parse_manifest_fields(sub_argc, sub_argv, true, ulpm_help_set, res.opts, res.update); break;
+        case Op::Set:     parse_manifest_fields(sub_argc, sub_argv, false, ulpm_help_init, res.opts, res.update); break;
+        case Op::Run:
+        case Op::Install:
+        case Op::Build:   parse_run_args(sub_argc, sub_argv, res.opts.arguments); break;
+        default:          help(ulpm_help, EXIT_FAILURE); break;
     }
 
-    return true;
+    return res;
+}
+
+static void register_backends()
+{
+    g_registry.registerBackend("javascript", [] { return std::make_unique<JsBackend>(); });
+    g_registry.registerBackend("rust", [] { return std::make_unique<RustBackend>(); });
 }
 
 int main(int argc, char* argv[])
 {
-    if (!parseargs(argc, argv))
-        return -1;
+    std::optional<parse_result_t> parsed = parseargs(argc, argv);
+    if (!parsed)
+        return EXIT_FAILURE;
 
     setlocale(LC_ALL, "");
-    if (cmd_options.init_yes)
+    register_backends();
+
+    if (parsed->opts.init_yes)
     {
-        if (Settings::manifest_defaults.project_version.empty())
-            Settings::manifest_defaults.project_version = "0.0.1";
-        if (Settings::manifest_defaults.js_main_src.empty())
-            Settings::manifest_defaults.js_main_src = "src/main.js";
-        if (Settings::manifest_defaults.js_runtime.empty())
-            Settings::manifest_defaults.js_runtime = "Node.js";
+        if (!parsed->update.project_version)
+            parsed->update.project_version = "0.0.1";
     }
-    Settings::Manifest man;
 
-    switch (op)
+    Manifest manifest;
+    switch (parsed->op)
     {
-        case INIT:
-            display.begin();
-            man.init_project(cmd_options);
-            break;
+        case Op::Init: op_init(manifest, parsed->opts, parsed->update); break;
+        case Op::Set:  op_set(manifest, parsed->update); break;
 
-        case SET: man.set_project_settings(cmd_options); break;
+        case Op::Run:
+        case Op::Install:
+        case Op::Build:   op_run(manifest, parsed->cmd, parsed->opts); break;
 
-        case RUN:
-        case INSTALL:
-        case BUILD:
-            man.validate_manifest();
-            man.run_cmd(cmd, cmd_options.arguments);
-            break;
-
-        default: help(ulpm_help, EXIT_FAILURE);
+        default: break;
     }
 
     return EXIT_SUCCESS;

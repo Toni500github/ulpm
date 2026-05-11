@@ -23,6 +23,7 @@
  *
  */
 
+#include <filesystem>
 #include <sstream>
 
 #define RAPIDJSON_HAS_STDSTRING 1
@@ -109,7 +110,7 @@ std::string draw_entry_menu(const std::string&              prompt,
     struct tb_event ev            = {};
     size_t          selected      = 0;
     size_t          scroll_offset = 0;
-    size_t          cursor_x      = SEARCH_TITLE_LEN + query.length();
+    size_t          cursor_x      = SEARCH_TITLE_LEN + query.length() + default_option.length();
     bool            is_search_tab = true;
 
     if (!default_option.empty())
@@ -120,6 +121,9 @@ std::string draw_entry_menu(const std::string&              prompt,
         else
             is_search_tab = false;
     }
+
+    if (!termbox.isInit())
+        termbox.begin();
 
     termbox.clearDisplay();
     termbox.DrawSearchBox(query, prompt, results, selected, scroll_offset, cursor_x, is_search_tab);
@@ -252,7 +256,7 @@ std::string draw_entry_menu(const std::string&              prompt,
         else
         {
             termbox.DrawSearchBox(
-                query, prompt, (query.empty() ? entries : results), selected, scroll_offset, cursor_x, is_search_tab);            
+                query, prompt, (query.empty() ? entries : results), selected, scroll_offset, cursor_x, is_search_tab);
         }
     }
 
@@ -264,7 +268,10 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
     const size_t    INPUT_TITLE_LEN = prompt.length() + 1;
     std::string     input           = default_option;
     struct tb_event ev              = {};
-    size_t          cursor_x        = INPUT_TITLE_LEN;
+    size_t          cursor_x        = INPUT_TITLE_LEN + default_option.size();
+
+    if (!termbox.isInit())
+        termbox.begin();
 
     termbox.clearDisplay();
     termbox.DrawInputBox(prompt, input, cursor_x - INPUT_TITLE_LEN);
@@ -347,6 +354,16 @@ std::string draw_input_menu(const std::string& prompt, const std::string& defaul
     return "";
 }
 
+void output_to_file(const std::string_view path, const std::string_view content, bool force)
+{
+    if (!force && std::filesystem::exists(path.data()))
+        return;
+
+    auto f = fmt::output_file(path.data(), fmt::file::CREATE | fmt::file::WRONLY | (force ? fmt::file::TRUNC : 0));
+    f.print("{}", content);
+    f.close();
+}
+
 namespace JsonUtils
 {
 
@@ -388,8 +405,11 @@ void write_to_json(std::FILE* file, const rapidjson::Document& doc)
     fflush(file);
 }
 
-void autogen_empty_json(const std::string_view name)
+void autogen_empty_json(const std::string_view name, bool force)
 {
+    if (!force && std::filesystem::exists(name.data()))
+        return;
+
     auto f = fmt::output_file(name.data(), fmt::file::CREATE | fmt::file::WRONLY | fmt::file::TRUNC);
     f.print("{{}}");
     f.close();

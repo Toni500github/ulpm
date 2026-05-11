@@ -26,10 +26,14 @@ size_t utf8_len(const std::string& s);
 class TerminalDisplay
 {
 public:
-    TerminalDisplay() : m_width(0), m_height(0), m_cursor_x(0), m_cursor_y(0), m_fg_col(0), m_bg_col(0) {}
+    TerminalDisplay()
+        : m_has_init(false), m_width(0), m_height(0), m_cursor_x(0), m_cursor_y(0), m_fg_col(0), m_bg_col(0)
+    {}
     ~TerminalDisplay();
 
     bool begin();
+    void shutdown();
+
     void clearDisplay();
     void setCursor(const int x, const int y);
     void setTextColor(const uintattr_t hex);
@@ -87,10 +91,11 @@ public:
         }
     }
 
-    int getWidth() const { return m_width; }
-    int getHeight() const { return m_height; }
-    int getCursorX() const { return m_cursor_x; }
-    int getCursorY() const { return m_cursor_y; }
+    int  getWidth() const { return m_width; }
+    int  getHeight() const { return m_height; }
+    int  getCursorX() const { return m_cursor_x; }
+    int  getCursorY() const { return m_cursor_y; }
+    bool isInit() const { return m_has_init; }
 
     int pctX(float p) const { return static_cast<int>(m_width * p); }
     int pctY(float p) const { return static_cast<int>(m_height * p); }
@@ -100,6 +105,7 @@ public:
     void showCursor() { tb_set_cursor(m_cursor_x, m_cursor_y); }
 
 private:
+    bool       m_has_init;
     int        m_width, m_height;
     int        m_cursor_x, m_cursor_y;
     uintattr_t m_fg_col, m_bg_col;

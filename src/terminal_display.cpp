@@ -4,7 +4,6 @@
 #include <cstdlib>
 
 #define TB_IMPL 1
-#include "settings.hpp"
 #include "terminal_display.hpp"
 #include "utf8.h"
 
@@ -34,19 +33,31 @@ static void enable_ansi_colors()
 
 TerminalDisplay::~TerminalDisplay()
 {
-    clearDisplay();
-    tb_shutdown();
+    shutdown();
 }
 
 bool TerminalDisplay::begin()
 {
+    if (m_has_init)
+        return true;
+
     enable_ansi_colors();
     if (tb_init() < 0)
         return false;
 
     updateDims();
     tb_hide_cursor();
+    m_has_init = true;
     return true;
+}
+
+void TerminalDisplay::shutdown()
+{
+    if (!m_has_init)
+        return;
+    clearDisplay();
+    tb_shutdown();
+    m_has_init = false;
 }
 
 void TerminalDisplay::updateDims()

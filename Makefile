@@ -39,7 +39,7 @@ NAME		 = ulpm
 TARGET		?= $(NAME)
 OLDVERSION	 = 0.0.0
 VERSION    	 = 0.0.1
-SRC	 	 = $(wildcard src/*.cpp)
+SRC	 	 = $(wildcard src/*.cpp src/backends/*.cpp)
 OBJ	 	 = $(SRC:.cpp=.o)
 LDFLAGS   	+= -L$(BUILDDIR)
 LDLIBS		+= $(BUILDDIR)/libfmt.a $(BUILDDIR)/libtiny-process-library.a
