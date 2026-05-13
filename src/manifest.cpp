@@ -8,24 +8,24 @@
 static constexpr std::string_view config_json = R"({
     "commands": {
         "npm": {
-            "run": "npm run",
-            "install": "npm install",
+            "run": ["npm", "run"],
+            "install": ["npm", "install"],
             "build": "echo \"Not supported. Modify command to be used in ulpm.json\" && exit 1"
         },
         "yarn": {
-            "run": "yarn run",
-            "install": "yarn install",
+            "run": ["yarn", "run"],
+            "install": ["yarn", "install"],
             "build": "echo \"Not supported. Modify command to be used in ulpm.json\" && exit 1"
         },
         "pnpm": {
-            "run": "pnpm run",
-            "install": "pnpm install",
+            "run": ["pnpm", "run"],
+            "install": ["pnpm", "install"],
             "build": "echo \"Not supported. Modify command to be used in ulpm.json\" && exit 1"
         },
         "cargo": {
-            "run": "cargo run",
-            "install": "cargo add",
-            "build": "cargo build"
+            "run": ["cargo", "run"],
+            "install": ["cargo", "add"],
+            "build": ["cargo", "build"]
         }
     }
 })";

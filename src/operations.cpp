@@ -173,9 +173,37 @@ void op_run(Manifest& manifest, const std::string& cmd, const cmd_options_t& opt
     if (!doc["commands"].HasMember(cmd.c_str()))
         die("Unknown command '{}' for package manager '{}'", cmd, pm);
 
-    const std::string exec =
-        fmt::format("{} {}", doc["commands"][cmd.c_str()].GetString(), fmt::join(opts.arguments, " "));
-    debug("Running: {}", exec);
-    if (TinyProcessLib::Process(exec).get_exit_status() != 0)
-        die("Command failed: {}", exec);
+    const rapidjson::Value& jcmd = doc["commands"][cmd.c_str()];
+    // excevp() like
+    if (jcmd.IsArray())
+    {
+        std::vector<std::string> arg_cmd;
+
+        for (const rapidjson::Value& value : jcmd.GetArray())
+        {
+            if (!value.IsString())
+                die("Command array for {} must contain only strings", cmd);
+            arg_cmd.emplace_back(value.GetString());
+        }
+
+        for (const std::string& arg : opts.arguments)
+            arg_cmd.emplace_back(arg);
+
+        debug("Running: {}", arg_cmd);
+        if (TinyProcessLib::Process(arg_cmd).get_exit_status() != 0)
+            die("Command failed: {}", arg_cmd);
+    }
+    // running in a shell
+    else if (jcmd.IsString())
+    {
+        const std::string exec =
+            fmt::format("{} {}", jcmd.GetString(), fmt::join(opts.arguments, " "));
+        debug("Running: {}", exec);
+        if (TinyProcessLib::Process(exec).get_exit_status() != 0)
+            die("Command failed: {}", exec);
+    }
+    else
+    {
+        die("Command for {} is neither an array or string");
+    }
 }
