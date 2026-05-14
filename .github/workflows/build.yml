@@ -1,0 +1,196 @@
+name: Build/Release ulpm
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+env:
+  BUILD_TYPE: ${{ startsWith(github.ref, 'refs/tags/v') && '0' || '1' }}
+
+jobs:
+  get-version:
+    name: Get Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from git tag or commit
+        id: get-version
+        run: |
+          if [ -n "$(git tag --points-at HEAD)" ]; then
+            version=$(git describe --tags --abbrev=0)
+            echo "version=$version" >> $GITHUB_OUTPUT
+          else
+            version=$(git rev-parse --short HEAD)
+            echo "version=commit-$version" >> $GITHUB_OUTPUT
+          fi
+          echo "Version: $version"
+
+  build:
+    name: Build (${{ matrix.artifact-name }})
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            arch: x86_64
+            artifact-name: ulpm-linux-x86_64
+            package-ext: tar.gz
+            content-type: application/gzip
+
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            artifact-name: ulpm-linux-aarch64
+            package-ext: tar.gz
+            content-type: application/gzip
+
+          - os: macos-15-intel
+            arch: x86_64
+            artifact-name: ulpm-macos-x86_64
+            package-ext: tag.gz
+            content-type: application/gzip
+
+          - os: macos-latest
+            arch: aarch64
+            artifact-name: ulpm-macos-aarch64
+            package-ext: tar.gz
+            content-type: application/gzip
+
+          - os: windows-latest
+            arch: x86_64
+            artifact-name: ulpm-windows-x86_64
+            package-ext: zip
+            content-type: application/x-zip-compressed
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # Dependencies
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get purge firefox -y
+          sudo apt-get install -y build-essential pkg-config make software-properties-common
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt-get update
+          sudo apt-get install -y g++-13
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install pkg-config make
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            git
+            zip
+            patch
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+
+      # Build
+      - name: Build project (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: make all DEBUG=0
+
+      - name: Build project (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: make all DEBUG=0
+
+      # Packaging
+      - name: Package (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mv ./build/release/ulpm .
+          tar -zcf ${{ matrix.artifact-name }}.tar.gz ulpm assets/
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          mkdir -p build-zip/
+          mv ./build/release/ulpm.exe assets/ ./build-zip/
+          cd ./build-zip/
+          ldd ./ulpm.exe | grep -i mingw | awk '{print $3}' | xargs -i cp {} ./
+          zip -r ../${{ matrix.artifact-name }}.zip *
+
+      # Upload artifact
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: ./${{ matrix.artifact-name }}.${{ matrix.package-ext }}
+
+      # Upload artifact
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: ./${{ matrix.artifact-name }}.${{ matrix.package-ext }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    name: Create GitHub Release & Upload Assets
+    needs: [build, get-version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Downlad all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: List downloaded files
+        run: find artifacts/ -type f | sort
+
+      - name: Rename assets to include version tag
+        env:
+          VERSION: ${{ needs.get-version.outputs.version }}
+        run: |
+          for f in artifacts/**/*; do
+            [ -f "$f" ] || continue;
+            ext="${f##*.}"
+            base=$(basename "$f" ".ext")
+            dir=$(dirname "$f")
+            mv "$f" "$dir/$base-$VERSION.$ext"
+          done
+          find artifacts/ -type f | sort
+
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.get-version.outputs.version }}
+          name: ulpm ${{ needs.get-version.outputs.version }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
