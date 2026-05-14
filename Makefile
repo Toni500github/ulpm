@@ -8,7 +8,7 @@ DEBUG 		?= 1
 
 COMPILER := $(shell $(CXX) --version | head -n1)
 
-ifeq ($(findstring GCC,$(COMPILER)),GCC)
+ifeq ($(findstring g++,$(COMPILER)),g++)
 	export LTO_FLAGS = -flto=auto -ffat-lto-objects
 else ifeq ($(findstring clang,$(COMPILER)),clang)
 	export LTO_FLAGS = -flto=thin
@@ -19,11 +19,11 @@ endif
 # https://stackoverflow.com/a/1079861
 # WAY easier way to build debug and release builds
 ifeq ($(DEBUG), 1)
-        BUILDDIR  := build/debug
+    BUILDDIR  := build/debug
 	LTO_FLAGS  = -fno-lto
-        CXXFLAGS  := -ggdb3 -Wall -Wextra -pedantic -Wno-unused-parameter -fsanitize=address \
-			-DDEBUG=1 -fno-omit-frame-pointer $(DEBUG_CXXFLAGS) $(CXXFLAGS)
-        LDFLAGS	  += -fsanitize=address -fno-lto -Wl,-rpath,$(BUILDDIR)
+    LDFLAGS	  += -fsanitize=address -fno-lto -Wl,-rpath,$(BUILDDIR)
+    CXXFLAGS  := -ggdb3 -Wall -Wextra -pedantic -Wno-unused-parameter -fsanitize=address \
+				-DDEBUG=1 -fno-omit-frame-pointer $(DEBUG_CXXFLAGS) $(CXXFLAGS)
 else
 	# Check if an optimization flag is not already set
 	ifneq ($(filter -O%,$(CXXFLAGS)),)
@@ -32,18 +32,18 @@ else
     		CXXFLAGS := -O3 $(CXXFLAGS)
 	endif
 	LDFLAGS   += $(LTO_FLAGS)
-        BUILDDIR  := build/release
+    BUILDDIR  := build/release
 endif
 
 NAME		 = ulpm
 TARGET		?= $(NAME)
 OLDVERSION	 = 0.0.0
 VERSION    	 = 0.0.1
-SRC	 	 = $(wildcard src/*.cpp src/backends/*.cpp)
-OBJ	 	 = $(SRC:.cpp=.o)
+SRC	 	     = $(wildcard src/*.cpp src/backends/*.cpp)
+OBJ	 	     = $(SRC:.cpp=.o)
 LDFLAGS   	+= -L$(BUILDDIR)
 LDLIBS		+= $(BUILDDIR)/libfmt.a $(BUILDDIR)/libtiny-process-library.a
-CXXFLAGS        += $(LTO_FLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -Iinclude -Iinclude/libs -std=$(CXXSTD) $(VARS) -DVERSION=\"$(VERSION)\"
+CXXFLAGS    += $(LTO_FLAGS) -fvisibility-inlines-hidden -fvisibility=hidden -Iinclude -Iinclude/libs -std=$(CXXSTD) $(VARS) -DVERSION=\"$(VERSION)\"
 
 all: genver fmt toml tpl getopt-port $(TARGET)
 

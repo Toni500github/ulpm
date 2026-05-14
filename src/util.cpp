@@ -23,17 +23,21 @@
  *
  */
 
-#include <filesystem>
-#include <sstream>
-
 #define RAPIDJSON_HAS_STDSTRING 1
+#ifdef GetObject
+#  undef GetObject
+#endif
+
+#include "util.hpp"
 
 #include <unistd.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <filesystem>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -45,7 +49,6 @@
 #include "rapidjson/filewritestream.h"
 #include "rapidjson/prettywriter.h"
 #include "utf8.h"
-#include "util.hpp"
 
 constexpr size_t SEARCH_TITLE_LEN = 2 + 8;  // 2 for box border, 8 for "Search: "
 

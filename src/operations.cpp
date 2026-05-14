@@ -65,7 +65,7 @@ void op_init(Manifest& manifest, const cmd_options_t& opts, const manifest_updat
     {
         s.language = draw_entry_menu("Choose the language", g_registry.languageNames(), s.language);
     }
-    else 
+    else
     {
         if (s.project_name.empty())
             die("--yes requires --project_name=<name>");
@@ -196,8 +196,7 @@ void op_run(Manifest& manifest, const std::string& cmd, const cmd_options_t& opt
     // running in a shell
     else if (jcmd.IsString())
     {
-        const std::string exec =
-            fmt::format("{} {}", jcmd.GetString(), fmt::join(opts.arguments, " "));
+        const std::string exec = fmt::format("{} {}", jcmd.GetString(), fmt::join(opts.arguments, " "));
         debug("Running: {}", exec);
         if (TinyProcessLib::Process(exec).get_exit_status() != 0)
             die("Command failed: {}", exec);

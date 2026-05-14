@@ -7,7 +7,8 @@ on:
   pull_request:
 
 env:
-  BUILD_TYPE: ${{ startsWith(github.ref, 'refs/tags/v') && '0' || '1' }}
+  DEBUG: ${{ startsWith(github.ref, 'refs/tags/v') && '0' || '1' }}
+  BUILDDIR: ${{ startsWith(github.ref, 'refs/tags/v') && 'build/release' || 'build/debug' }}
 
 jobs:
   get-version:
@@ -114,37 +115,29 @@ jobs:
       # Build
       - name: Build project (Linux / macOS)
         if: runner.os != 'Windows'
-        run: make all DEBUG=0
+        run: make all DEBUG=$DEBUG
 
       - name: Build project (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
-        run: make all DEBUG=0
+        run: make all DEBUG=$DEBUG
 
       # Packaging
       - name: Package (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
-          mv ./build/release/ulpm .
-          tar -zcf ${{ matrix.artifact-name }}.tar.gz ulpm assets/
+          mv ./$BUILDDIR/ulpm .
+          tar -zcf ${{ matrix.artifact-name }}.tar.gz ulpm
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           mkdir -p build-zip/
-          mv ./build/release/ulpm.exe assets/ ./build-zip/
+          mv ./$BUILDDIR/ulpm.exe ./build-zip/
           cd ./build-zip/
           ldd ./ulpm.exe | grep -i mingw | awk '{print $3}' | xargs -i cp {} ./
           zip -r ../${{ matrix.artifact-name }}.zip *
-
-      # Upload artifact
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact-name }}
-          if-no-files-found: error
-          path: ./${{ matrix.artifact-name }}.${{ matrix.package-ext }}
 
       # Upload artifact
       - name: Upload artifact
