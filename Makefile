@@ -21,8 +21,8 @@ endif
 ifeq ($(DEBUG), 1)
     BUILDDIR  := build/debug
 	LTO_FLAGS  = -fno-lto
-    LDFLAGS	  += -fsanitize=address -fno-lto -Wl,-rpath,$(BUILDDIR)
-    CXXFLAGS  := -ggdb3 -Wall -Wextra -pedantic -Wno-unused-parameter -fsanitize=address \
+    LDFLAGS	  += -fno-lto -Wl,-rpath,$(BUILDDIR)
+    CXXFLAGS  := -ggdb3 -Wall -Wextra -pedantic -Wno-unused-parameter \
 				-DDEBUG=1 -fno-omit-frame-pointer $(DEBUG_CXXFLAGS) $(CXXFLAGS)
 else
 	# Check if an optimization flag is not already set

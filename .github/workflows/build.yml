@@ -59,7 +59,7 @@ jobs:
           - os: macos-15-intel
             arch: x86_64
             artifact-name: ulpm-macos-x86_64
-            package-ext: tag.gz
+            package-ext: tar.gz
             content-type: application/gzip
 
           - os: macos-latest

@@ -24,9 +24,6 @@
  */
 
 #define RAPIDJSON_HAS_STDSTRING 1
-#ifdef GetObject
-#  undef GetObject
-#endif
 
 #include "util.hpp"
 
@@ -376,7 +373,7 @@ std::vector<std::string> vec_from_members(const rapidjson::Value& obj)
     if (!obj.IsObject())
         return keys;
     keys.reserve(obj.MemberCount());
-    for (auto const& item : obj.GetObject())
+    for (auto const& item : obj.GetObj())
         keys.emplace_back(item.name.GetString());
     return keys;
 }
