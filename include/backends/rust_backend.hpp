@@ -1,8 +1,7 @@
 #pragma once
 
-#define TOML_HEADER_ONLY 0
+#include "custom_toml_writter.hpp"
 #include "language_backend.hpp"
-#include "toml++/toml.hpp"
 
 class RustBackend final : public LanguageBackend
 {
@@ -19,6 +18,5 @@ public:
 private:
     std::string m_rust_edition = "2024";
 
-    static toml::table& ensure_table(toml::table& parent, std::string_view key);
-    static void         write_toml(const toml::table& tbl, const char* path);
+    static void write_toml(const OrderedToml& tbl, const char* path);
 };
