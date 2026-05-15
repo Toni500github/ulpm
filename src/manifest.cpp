@@ -1,6 +1,7 @@
 #include "manifest.hpp"
 
 #include "backend_registry.hpp"
+#include "fmt/ranges.h"
 #include "manifest_settings.hpp"
 #include "rapidjson/error/en.h"
 #include "util.hpp"
@@ -68,14 +69,18 @@ Manifest::Manifest()
 
 void Manifest::load_common_fields()
 {
+    if (!m_doc.HasMember("project") || !m_doc["project"].IsObject())
+        die("project field in {} is not an object", MANIFEST_NAME);
+
     auto read = [&](const char* key, std::string& out) {
-        if (m_doc.HasMember(key) && m_doc[key].IsString())
-            out = m_doc[key].GetString();
+        rapidjson::Value& project = m_doc["project"];
+        if (project.HasMember(key) && project[key].IsString())
+            out = project[key].GetString();
     };
 
-    read("project_name", m_settings.project_name);
-    read("project_description", m_settings.project_description);
-    read("project_version", m_settings.project_version);
+    read("name", m_settings.project_name);
+    read("description", m_settings.project_description);
+    read("version", m_settings.project_version);
     read("author", m_settings.author);
     read("license", m_settings.license);
     read("language", m_settings.language);
@@ -84,18 +89,19 @@ void Manifest::load_common_fields()
 
 void Manifest::save()
 {
-    m_file.reopen(MANIFEST_NAME, "w+");
+    if (!m_backend)
+        die("Unknown language '{}'", m_settings.language);
 
+    m_file.reopen(MANIFEST_NAME, "w+");
     m_doc.SetObject();
     rapidjson::Document::AllocatorType& alloc = m_doc.GetAllocator();
 
-    auto put = [&](const char* key, const std::string& value) {
-        m_doc.AddMember(rapidjson::Value(key, alloc), rapidjson::Value(value.c_str(), alloc), alloc);
-    };
+    m_doc.AddMember("project", rapidjson::Value(rapidjson::kObjectType), alloc);
+    auto put = [&](const char* key, const std::string& value) { JsonUtils::update_json_field(m_doc, key, value); };
 
-    put("project_name", m_settings.project_name);
-    put("project_description", m_settings.project_description);
-    put("project_version", m_settings.project_version);
+    put("name", m_settings.project_name);
+    put("description", m_settings.project_description);
+    put("version", m_settings.project_version);
     put("author", m_settings.author);
     put("license", m_settings.license);
     put("language", m_settings.language);
@@ -106,7 +112,9 @@ void Manifest::save()
         const char* pm       = m_settings.package_manager.c_str();
 
         if (!commands.HasMember(pm))
-            die("Unknown package manager '{}'", pm);
+            die("Unknown package manager '{}'. Choose from:\x1b[0m\n - {}",
+                pm,
+                fmt::join(m_backend->packageManagers(), "\n - "));
 
         rapidjson::Value commandsValue;
         commandsValue.CopyFrom(commands[pm], alloc);
@@ -114,8 +122,7 @@ void Manifest::save()
         m_doc.AddMember("commands", commandsValue, alloc);
     }
 
-    if (m_backend)
-        m_backend->save(m_doc);  // backend appends its own sub-object
+    m_backend->save(m_doc);  // backend appends its own sub-object
 
     JsonUtils::write_to_json(m_file, m_doc);
 }

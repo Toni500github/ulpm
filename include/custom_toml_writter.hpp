@@ -50,7 +50,7 @@ private:
 
     static std::string format_value(const toml::node& node)
     {
-        std::stringstream ss;
+        std::stringstream    ss;
         toml::toml_formatter formatter{ node,
                                         toml::format_flags::none | toml::format_flags::allow_unicode_strings |
                                             toml::format_flags::allow_multi_line_strings |

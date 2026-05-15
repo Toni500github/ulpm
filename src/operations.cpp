@@ -75,15 +75,20 @@ void op_init(Manifest& manifest, const cmd_options_t& opts, const manifest_updat
             die("--yes requires --language=<lang>");
     }
 
-    if (s.language == "rust" && s.package_manager.empty())
-        s.package_manager = "cargo";
+    if (s.package_manager.empty())
+    {
+        if (s.language == "rust")
+            s.package_manager = "cargo";
+        else if (s.language == "javascript")
+            die("--language=javascript requires a --package_manager. Choose from:\x1b[0m\n - npm\n - yarn \n - pnpm");
+    }
 
     std::unique_ptr<LanguageBackend> backend = g_registry.create(s.language);
     if (!backend)
     {
         const std::vector<std::string>& names = g_registry.languageNames();
 
-        fmt::print(stderr, "Unknown language: {}\n\nAvailable backends:\n", s.language);
+        fmt::print(stderr, "Unknown language '{}'\n\nAvailable backends:\n", s.language);
 
         for (const std::string& n : names)
             fmt::print(stderr, " - {}\n", n);
