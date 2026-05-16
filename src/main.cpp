@@ -60,13 +60,12 @@ enum class Op
     None,
     Init,
     Set,
-    Run,
-    Install,
-    Build
+    External
 };
 
 static const std::unordered_map<std::string_view, Op> k_op_map = {
-    { "init", Op::Init }, { "set", Op::Set }, { "run", Op::Run }, { "install", Op::Install }, { "build", Op::Build },
+    { "init", Op::Init },
+    { "set", Op::Set },
 };
 
 struct parse_result_t
@@ -214,6 +213,8 @@ static std::optional<parse_result_t> parseargs(int argc, char* argv[])
 
     if (auto it = k_op_map.find(res.cmd); it != k_op_map.end())
         res.op = it->second;
+    else
+        res.op = Op::External;
 
     int    sub_argc = argc - optind - 1;
     char** sub_argv = argv + optind + 1;
@@ -221,12 +222,10 @@ static std::optional<parse_result_t> parseargs(int argc, char* argv[])
 
     switch (res.op)
     {
-        case Op::Init:    parse_manifest_fields(sub_argc, sub_argv, true, ulpm_help_set, res.opts, res.update); break;
-        case Op::Set:     parse_manifest_fields(sub_argc, sub_argv, false, ulpm_help_init, res.opts, res.update); break;
-        case Op::Run:
-        case Op::Install:
-        case Op::Build:   parse_run_args(sub_argc, sub_argv, res.opts.arguments); break;
-        default:          help(ulpm_help, EXIT_FAILURE); break;
+        case Op::Init:     parse_manifest_fields(sub_argc, sub_argv, true, ulpm_help_set, res.opts, res.update); break;
+        case Op::Set:      parse_manifest_fields(sub_argc, sub_argv, false, ulpm_help_init, res.opts, res.update); break;
+        case Op::External: parse_run_args(sub_argc, sub_argv, res.opts.arguments); break;
+        default:           help(ulpm_help, EXIT_FAILURE); break;
     }
 
     return res;
@@ -256,12 +255,9 @@ int main(int argc, char* argv[])
     Manifest manifest;
     switch (parsed->op)
     {
-        case Op::Init: op_init(manifest, parsed->opts, parsed->update); break;
-        case Op::Set:  op_set(manifest, parsed->update); break;
-
-        case Op::Run:
-        case Op::Install:
-        case Op::Build:   op_run(manifest, parsed->cmd, parsed->opts); break;
+        case Op::Init:     op_init(manifest, parsed->opts, parsed->update); break;
+        case Op::Set:      op_set(manifest, parsed->update); break;
+        case Op::External: op_run(manifest, parsed->cmd, parsed->opts); break;
 
         default: break;
     }

@@ -85,14 +85,9 @@ void op_init(Manifest& manifest, const cmd_options_t& opts, const manifest_updat
 
     std::unique_ptr<LanguageBackend> backend = g_registry.create(s.language);
     if (!backend)
-    {
-        const std::vector<std::string>& names = g_registry.languageNames();
-
-        fmt::print(stderr, "Unknown language '{}'\n\nAvailable backends:\n", s.language);
-
-        for (const std::string& n : names)
-            fmt::print(stderr, " - {}\n", n);
-    }
+        die("Unknown language '{}'\n\nAvailable backends:\n - {}",
+            s.language,
+            fmt::join(g_registry.languageNames(), "\n - "));
 
     if (!opts.init_yes)
     {
