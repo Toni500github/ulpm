@@ -1,14 +1,13 @@
-#define RAPIDJSON_HAS_STDSTRING 1
 #include "backends/js_backend.hpp"
 
 #include <filesystem>
-#include <utility>
 #include <vector>
 
 #include "rapidjson/document.h"
 #include "util.hpp"
 
 namespace fs = std::filesystem;
+using namespace JsonUtils;
 
 void JsBackend::load(const rapidjson::Document& doc)
 {
@@ -31,12 +30,12 @@ void JsBackend::save(rapidjson::Document& doc) const
     rapidjson::Value                    obj(rapidjson::kObjectType);
     rapidjson::Value                    obj_runtime(rapidjson::kObjectType);
 
-    obj_runtime.AddMember("name", rapidjson::Value(m_js_runtime_name.c_str(), alloc), alloc);
-    obj_runtime.AddMember("bin", rapidjson::Value(m_js_runtime_bin.c_str(), alloc), alloc);
+    update_json_field(obj_runtime, "name", m_js_runtime_name, alloc);
+    update_json_field(obj_runtime, "bin", m_js_runtime_bin, alloc);
 
-    obj.AddMember("main_src", rapidjson::Value(m_js_main_src.c_str(), alloc), alloc);
-    obj.AddMember("runtime", std::move(obj_runtime), alloc);
-    doc.AddMember("javascript", std::move(obj), alloc);
+    update_json_field(obj, "main_src", m_js_main_src, alloc);
+    update_json_field(obj, "runtime", obj_runtime, alloc);
+    update_json_field(doc, "javascript", obj, alloc);
 }
 
 void JsBackend::promptInit(manifest_settings_t& common)
@@ -65,24 +64,24 @@ void JsBackend::generateFiles(const manifest_settings_t& s)
     rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
 
     info("Creating package.json");
-    JsonUtils::autogen_empty_json("package.json", true);
+    autogen_empty_json("package.json", true);
 
     f.open("package.json", "r+");
 
-    JsonUtils::populate_doc(f, doc);
-    doc.AddMember("name", s.project_name, alloc);
-    doc.AddMember("version", s.project_version, alloc);
-    doc.AddMember("description", s.project_description, alloc);
+    populate_doc(f, doc);
+    update_json_field(doc, "name", s.project_name, alloc);
+    update_json_field(doc, "version", s.project_version, alloc);
+    update_json_field(doc, "description", s.project_description, alloc);
 
-    doc.AddMember("scripts", rapidjson::Value(rapidjson::kObjectType), alloc);
-    doc["scripts"].AddMember("start", m_js_runtime_bin + " " + m_js_main_src, alloc);
+    update_json_field(doc, "scripts", rapidjson::Value(rapidjson::kObjectType), alloc);
+    update_json_field(doc["scripts"], "start", m_js_runtime_bin + " " + m_js_main_src, alloc);
 
-    doc.AddMember("keywords", rapidjson::Value(rapidjson::kArrayType), alloc);
-    doc.AddMember("author", s.author, alloc);
-    doc.AddMember("license", s.license, alloc);
-    doc.AddMember("main", m_js_main_src, alloc);
-    doc.AddMember("type", "commonjs", alloc);
-    JsonUtils::write_to_json(f, doc);
+    update_json_field(doc, "keywords", rapidjson::Value(rapidjson::kArrayType), alloc);
+    update_json_field(doc, "author", s.author, alloc);
+    update_json_field(doc, "license", s.license, alloc);
+    update_json_field(doc, "main", m_js_main_src, alloc);
+    update_json_field(doc, "type", "commonjs", alloc);
+    write_to_json(f, doc);
 
     info("Creating {} ...", m_js_main_src);
     fs::create_directories(fs::path(m_js_main_src).parent_path());
@@ -94,7 +93,7 @@ bool JsBackend::syncPkgManifest(const manifest_settings_t& /*common*/, const man
     FileHandler         f;
     rapidjson::Document doc;
 
-    JsonUtils::autogen_empty_json("package.json");
+    autogen_empty_json("package.json");
     f.open("package.json", "r+");
     JsonUtils::populate_doc(f, doc);
 
@@ -117,12 +116,12 @@ bool JsBackend::syncPkgManifest(const manifest_settings_t& /*common*/, const man
     if (upd.js_main_src)
     {
         m_js_main_src = *upd.js_main_src;
-        JsonUtils::update_json_field(doc, "main", *upd.js_main_src);
+        update_json_field(doc, "main", *upd.js_main_src);
         dirty = true;
     }
 
     if (dirty)
-        JsonUtils::write_to_json(f, doc);
+        write_to_json(f, doc);
 
     return dirty;
 }

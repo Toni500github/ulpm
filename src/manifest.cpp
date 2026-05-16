@@ -92,12 +92,15 @@ void Manifest::save()
     if (!m_backend)
         die("Unknown language '{}'", m_settings.language);
 
+    info("Saving " MANIFEST_NAME "...");
     m_file.reopen(MANIFEST_NAME, "w+");
     m_doc.SetObject();
     rapidjson::Document::AllocatorType& alloc = m_doc.GetAllocator();
 
-    m_doc.AddMember("project", rapidjson::Value(rapidjson::kObjectType), alloc);
-    auto put = [&](const char* key, const std::string& value) { JsonUtils::update_json_field(m_doc, key, value); };
+    JsonUtils::update_json_field(m_doc, "project", rapidjson::Value(rapidjson::kObjectType));
+    auto put = [&](const char* key, const std::string& value) {
+        JsonUtils::update_json_field(m_doc["project"], key, value, alloc);
+    };
 
     put("name", m_settings.project_name);
     put("description", m_settings.project_description);
@@ -119,7 +122,7 @@ void Manifest::save()
         rapidjson::Value commandsValue;
         commandsValue.CopyFrom(commands[pm], alloc);
 
-        m_doc.AddMember("commands", commandsValue, alloc);
+        JsonUtils::update_json_field(m_doc, "commands", commandsValue);
     }
 
     m_backend->save(m_doc);  // backend appends its own sub-object

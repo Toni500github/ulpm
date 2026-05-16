@@ -390,7 +390,7 @@ std::vector<std::string> vec_from_array(const rapidjson::Value& array)
     return keys;
 }
 
-void write_to_json(std::FILE* file, const rapidjson::Document& doc)
+void write_to_json(const FileHandler& file, const rapidjson::Document& doc)
 {
     // seek back to the beginning to overwrite
     fseek(file, 0, SEEK_SET);
@@ -415,7 +415,7 @@ void autogen_empty_json(const std::string_view name, bool force)
     f.close();
 }
 
-void populate_doc(std::FILE* file, rapidjson::Document& doc)
+void populate_doc(const FileHandler& file, rapidjson::Document& doc)
 {
     if (!file)
     {
@@ -428,28 +428,78 @@ void populate_doc(std::FILE* file, rapidjson::Document& doc)
 
     if (doc.ParseStream(stream).HasParseError())
     {
-        fclose(file);
         die("Failed to parse json file: {} At offset {}",
             rapidjson::GetParseError_En(doc.GetParseError()),
             doc.GetErrorOffset());
     };
 }
 
-void update_json_field(rapidjson::Document& pkg_doc, const std::string& field, const std::string& value)
+static std::string json_to_string(const rapidjson::Value& v)
 {
-    rapidjson::Document::AllocatorType& allocator = pkg_doc.GetAllocator();
+    rapidjson::StringBuffer                    buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    v.Accept(writer);
+    return buffer.GetString();
+}
 
-    if (pkg_doc.HasMember(field))
+void update_json_field(rapidjson::Document& pkg_doc, const std::string_view field, const std::string_view value)
+{
+    rapidjson::Value val;
+    val.SetString(value.data(), value.length(), pkg_doc.GetAllocator());
+    update_json_field(pkg_doc, field, val);
+}
+
+void update_json_field(rapidjson::Value&                   obj,
+                       const std::string_view              field,
+                       const std::string_view              value,
+                       rapidjson::Document::AllocatorType& allocator)
+{
+    rapidjson::Value val;
+    val.SetString(value.data(), value.length(), allocator);
+    update_json_field(obj, field, val, allocator);
+}
+
+void update_json_field(rapidjson::Value&                   obj,
+                       const std::string_view              field,
+                       const rapidjson::Value&             value,
+                       rapidjson::Document::AllocatorType& allocator)
+{
+    if (!obj.IsObject())
+        return;
+
+    const std::string value_str = json_to_string(value);
+    rapidjson::Value  key(field.data(), field.size(), allocator);
+
+    if (obj.HasMember(key))
     {
-        debug("changing {} from '{}' to '{}'", field, pkg_doc[field].GetString(), value);
-        pkg_doc[field].SetString(value.c_str(), value.length(), allocator);
+        debug("changing '{}' from {} to {}", field, json_to_string(obj[key]), value_str);
+        obj[key].CopyFrom(value, allocator);
     }
     else
     {
-        debug("adding field '{}' with value '{}'", field, value);
-        pkg_doc.AddMember(rapidjson::Value(field.c_str(), field.length(), allocator),
-                          rapidjson::Value(value.c_str(), value.length(), allocator),
-                          allocator);
+        debug("adding field '{}' with value {}", field, value_str);
+        rapidjson::Value val(value, allocator);
+        obj.AddMember(key, val, allocator);
+    }
+}
+
+void update_json_field(rapidjson::Document& pkg_doc, const std::string_view field, const rapidjson::Value& value)
+{
+    rapidjson::Document::AllocatorType& allocator = pkg_doc.GetAllocator();
+
+    const std::string value_str = json_to_string(value);
+    rapidjson::Value  key(field.data(), field.size(), allocator);
+
+    if (pkg_doc.HasMember(key))
+    {
+        debug("changing '{}' from {} to {}", field, json_to_string(pkg_doc[key]), value_str);
+        pkg_doc[key].CopyFrom(value, allocator);
+    }
+    else
+    {
+        debug("adding field '{}' with value {}", field, value_str);
+        rapidjson::Value val(value, allocator);
+        pkg_doc.AddMember(key, val, allocator);
     }
 }
 

@@ -26,6 +26,7 @@
 #pragma once
 
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string_view>
@@ -100,7 +101,7 @@ void info_stat(const std::string_view fmt, Args&&... args) noexcept
 
 struct FileHandler
 {
-    FILE* f;
+    std::FILE* f;
     FileHandler() : f(nullptr) {}
     ~FileHandler()
     {
@@ -110,7 +111,7 @@ struct FileHandler
     FileHandler(const FileHandler&)            = delete;
     FileHandler& operator=(const FileHandler&) = delete;
 
-    operator FILE*() const { return f; }
+    operator std::FILE*() const { return f; }
 
     void open(const std::string_view path, const std::string_view mode)
     {
@@ -167,11 +168,21 @@ namespace JsonUtils
 
 std::vector<std::string> vec_from_members(const rapidjson::Value& obj);
 std::vector<std::string> vec_from_array(const rapidjson::Value& array);
-void                     write_to_json(std::FILE* file, const rapidjson::Document& doc);
-void                     populate_doc(std::FILE* file, rapidjson::Document& doc);
+void                     write_to_json(const FileHandler& file, const rapidjson::Document& doc);
+void                     populate_doc(const FileHandler& file, rapidjson::Document& doc);
 void                     autogen_empty_json(const std::string_view name, bool force = false);
 std::string find_value_from_obj_array(const rapidjson::Value& array, const std::string& name, const std::string& value);
 std::vector<std::string> vec_from_obj_array(const rapidjson::Value& array, const std::string& name);
-void update_json_field(rapidjson::Document& pkg_doc, const std::string& field, const std::string& value);
+
+void update_json_field(rapidjson::Document& pkg_doc, const std::string_view field, const std::string_view value);
+void update_json_field(rapidjson::Document& pkg_doc, const std::string_view field, const rapidjson::Value& value);
+void update_json_field(rapidjson::Value&                   obj,
+                       const std::string_view              field,
+                       const rapidjson::Value&             value,
+                       rapidjson::Document::AllocatorType& allocator);
+void update_json_field(rapidjson::Value&                   obj,
+                       const std::string_view              field,
+                       const std::string_view              value,
+                       rapidjson::Document::AllocatorType& allocator);
 
 }  // namespace JsonUtils

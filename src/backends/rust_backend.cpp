@@ -30,8 +30,8 @@ void RustBackend::save(rapidjson::Document& doc) const
     rapidjson::Document::AllocatorType& alloc = doc.GetAllocator();
     rapidjson::Value                    obj(rapidjson::kObjectType);
 
-    obj.AddMember("edition", rapidjson::Value(m_rust_edition, alloc), alloc);
-    doc.AddMember("rust", std::move(obj), alloc);
+    JsonUtils::update_json_field(obj, "edition", m_rust_edition, alloc);
+    JsonUtils::update_json_field(doc, "rust", obj);
 }
 
 void RustBackend::promptInit(manifest_settings_t& common)
